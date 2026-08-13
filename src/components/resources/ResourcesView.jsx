@@ -110,7 +110,7 @@ INTEGRATION FORMULAS:
 export const ResourcesView = () => {
   const [resources, setResources] = useState(() => {
     try {
-      const saved = localStorage.getItem('ssp_real_resources_v4');
+      const saved = localStorage.getItem('ssp_real_resources_v5');
       return saved !== null ? JSON.parse(saved) : INITIAL_RESOURCES;
     } catch (e) {
       return INITIAL_RESOURCES;
@@ -118,7 +118,7 @@ export const ResourcesView = () => {
   });
 
   useEffect(() => {
-    localStorage.setItem('ssp_real_resources_v4', JSON.stringify(resources));
+    localStorage.setItem('ssp_real_resources_v5', JSON.stringify(resources));
   }, [resources]);
 
   const [search, setSearch] = useState('');
@@ -229,40 +229,63 @@ export const ResourcesView = () => {
     }
   };
 
-  // 1. OPEN DIRECTLY WITH DEVICE INTERNAL DOCUMENT READER / PDF VIEWER
+  // 1. OPEN PDF DIRECTLY IN EXTERNAL NATIVE ANDROID PDF READER
   const handleOpenDocumentDirectly = async (resource) => {
     if (!resource?.fileData) return;
 
+    console.log('[PDF OPEN] button clicked');
     const ext = getFileExt(resource.fileName, resource.fileType).toLowerCase();
     const fileName = resource.fileName || `${resource.title}.${ext}`;
+    const mimeType = resource.fileType || (ext === 'pdf' ? 'application/pdf' : `application/${ext}`);
 
-    // On Android Device: Write to Cache and Launch Device Internal Document Reader!
-    try {
-      if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform()) {
+    if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform()) {
+      try {
         let base64Content = resource.fileData;
         if (base64Content.includes(',')) {
           base64Content = base64Content.split(',')[1];
         }
 
-        // Save file to Cache
-        const writeResult = await Filesystem.writeFile({
-          path: fileName,
-          data: base64Content,
-          directory: Directory.Cache,
-          recursive: true
+        // Check if existing downloaded file is in Documents, or write to Cache
+        let localPath = '';
+        try {
+          const getUriResult = await Filesystem.getUri({
+            directory: Directory.Documents,
+            path: fileName
+          });
+          localPath = getUriResult.uri;
+          console.log('[PDF OPEN] existing local path:', localPath);
+        } catch (e) {
+          console.log('[PDF OPEN] file not found in Documents, writing to Cache...');
+          const writeResult = await Filesystem.writeFile({
+            path: fileName,
+            data: base64Content,
+            directory: Directory.Cache,
+            recursive: true
+          });
+          localPath = writeResult.uri;
+        }
+
+        console.log('[PDF OPEN] path:', localPath);
+        console.log('[PDF OPEN] path type:', typeof localPath);
+        console.log('[PDF OPEN] native URI:', localPath);
+        console.log('[PDF OPEN] mime:', mimeType);
+
+        console.log('[PDF OPEN] calling FileOpener');
+        await FileOpener.openFile({
+          path: localPath,
+          mimeType: mimeType
         });
 
-        // Launch Native Phone Document Reader
-        await FileOpener.openFile({
-          filePath: writeResult.uri
-        });
+        console.log('[PDF OPEN] FileOpener success');
         return;
+      } catch (error) {
+        console.error('[PDF OPEN] FileOpener FAILED:', error);
+        console.error('[PDF OPEN] error JSON:', JSON.stringify(error));
+        alert(`Could not open PDF viewer: ${error?.message || error || 'No PDF viewer installed'}`);
       }
-    } catch (err) {
-      console.warn('FileOpener native launch error, falling back to Browser open:', err);
     }
 
-    // Web Browser Fallback
+    // Web Browser Fallback:
     try {
       const blob = dataURItoBlob(resource.fileData);
       if (blob) {
@@ -290,12 +313,14 @@ export const ResourcesView = () => {
           base64Content = base64Content.split(',')[1];
         }
 
-        await Filesystem.writeFile({
+        const writeResult = await Filesystem.writeFile({
           path: fileName,
           data: base64Content,
           directory: Directory.Documents,
           recursive: true
         });
+
+        console.log('[PDF DOWNLOAD] written file path:', writeResult.uri);
 
         setToastMsg(`Saved ${fileName} to Documents!`);
         setTimeout(() => setToastMsg(null), 4000);
