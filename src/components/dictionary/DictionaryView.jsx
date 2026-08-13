@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   Search, Volume2, Bookmark, BookmarkCheck, Sparkles, BookOpen,
-  ArrowRight, RefreshCw, Trash2, Tag, Lightbulb, WifiOff
+  ArrowRight, RefreshCw, Trash2, Tag, Lightbulb
 } from 'lucide-react';
-import { searchOfflineLexicon, OFFLINE_DICTIONARY } from '../../data/offlineLexiconData';
 
 // Quick Popular Academic Words for Students
 const SUGGESTED_WORDS = [
   'Book', 'Perseverance', 'Photosynthesis', 'Hypothesis', 'Velocity',
-  'Catalyst', 'Equation', 'Osmosis', 'Momentum', 'Algorithm', 'Biodiversity'
+  'Catalyst', 'Equation', 'Osmosis', 'Momentum'
 ];
 
 export const DictionaryView = () => {
@@ -21,8 +20,6 @@ export const DictionaryView = () => {
   const [synonymsList, setSynonymsList] = useState([]);
   const [antonymsList, setAntonymsList] = useState([]);
   const [activeTab, setActiveTab] = useState('search'); // 'search' | 'saved'
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
-  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState([]);
 
   // Bookmarked vocabulary list stored in localStorage
   const [bookmarks, setBookmarks] = useState(() => {
@@ -62,56 +59,7 @@ export const DictionaryView = () => {
     localStorage.setItem('ssp_vocab_history', JSON.stringify(searchHistory));
   }, [searchHistory]);
 
-  // Live Offline Autocomplete Search Filtering
-  const handleSearchInputChange = (e) => {
-    const val = e.target.value;
-    setSearchTerm(val);
-
-    if (val.trim().length >= 1) {
-      const cleanVal = val.trim().toLowerCase();
-      const allDictKeys = Object.keys(OFFLINE_DICTIONARY);
-      const matches = allDictKeys.filter(k => k.startsWith(cleanVal)).slice(0, 6);
-      setAutocompleteSuggestions(matches);
-    } else {
-      setAutocompleteSuggestions([]);
-    }
-  };
-
-  // Helper for applying offline lexicon result
-  const applyOfflineLexiconResult = (cleanWord) => {
-    setIsOfflineMode(true);
-    const offlineResult = searchOfflineLexicon(cleanWord);
-
-    if (offlineResult) {
-      setBengaliTranslation({
-        primary: offlineResult.bengali,
-        phonetic: offlineResult.phonetic || cleanWord
-      });
-
-      setEnglishCategories(offlineResult.pos || []);
-      setSynonymsList(offlineResult.synonyms || []);
-      setAntonymsList(offlineResult.antonyms || []);
-
-      setWordData({
-        word: cleanWord,
-        phonetic: offlineResult.phonetic,
-        meanings: [
-          {
-            partOfSpeech: offlineResult.pos?.[0]?.pos || 'noun',
-            definitions: [
-              {
-                definition: offlineResult.definition,
-                example: offlineResult.example
-              }
-            ],
-            synonyms: offlineResult.synonyms
-          }
-        ]
-      });
-    }
-  };
-
-  // Main Comprehensive Fetch Routine (Online First + 100% Offline Fallback)
+  // Main Comprehensive Fetch Routine (Online Dictionary)
   const fetchWordDetails = async (queryWord) => {
     if (!queryWord || !queryWord.trim()) return;
     const cleanWord = queryWord.trim().toLowerCase();
@@ -122,8 +70,6 @@ export const DictionaryView = () => {
     setEnglishCategories([]);
     setSynonymsList([]);
     setAntonymsList([]);
-    setIsOfflineMode(false);
-    setAutocompleteSuggestions([]);
     setActiveWord(queryWord.trim());
 
     // Update Search History
@@ -132,15 +78,8 @@ export const DictionaryView = () => {
       return [queryWord.trim(), ...filtered].slice(0, 10);
     });
 
-    // Check internet connection
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      applyOfflineLexiconResult(cleanWord);
-      setLoading(false);
-      return;
-    }
-
     try {
-      // Execute 5 Concurrent Requests for Fast Online Performance
+      // Execute Concurrent Requests for Dictionary API & Translation
       const [dictRes, gtRes, synRes, antRes, posRes] = await Promise.allSettled([
         fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanWord)}`),
         fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=bn&dt=t&dt=bd&q=${encodeURIComponent(cleanWord)}`),
@@ -159,13 +98,7 @@ export const DictionaryView = () => {
         }
       }
 
-      // If online API returns nothing, use Offline Lexicon Engine
-      if (!parsedDictData && (gtRes.status !== 'fulfilled' || !gtRes.value.ok)) {
-        applyOfflineLexiconResult(cleanWord);
-        return;
-      }
-
-      // 2. Parse Primary Bengali Translation
+      // 2. Parse Google Translate Bengali Data
       if (gtRes.status === 'fulfilled' && gtRes.value.ok) {
         const gtJson = await gtRes.value.json();
         const primaryMeaning = gtJson?.[0]?.[0]?.[0] || cleanWord;
@@ -179,18 +112,11 @@ export const DictionaryView = () => {
           primary: primaryMeaning,
           phonetic: phoneticHint
         });
-      } else {
-        const offRes = searchOfflineLexicon(cleanWord);
-        setBengaliTranslation({
-          primary: offRes.bengali,
-          phonetic: offRes.phonetic || cleanWord
-        });
       }
 
       // 3. Build English Part of Speech Categories
       const posMap = new Map();
 
-      // Extract from Free Dictionary API
       if (parsedDictData?.meanings) {
         parsedDictData.meanings.forEach(m => {
           if (!m.partOfSpeech) return;
@@ -215,7 +141,6 @@ export const DictionaryView = () => {
         });
       }
 
-      // Extract from Datamuse Part of Speech API
       if (posRes.status === 'fulfilled' && posRes.value.ok) {
         const posJson = await posRes.value.json();
         if (Array.isArray(posJson)) {
@@ -250,13 +175,7 @@ export const DictionaryView = () => {
         }
       });
 
-      // Fallback if online POS fails
-      if (formattedPosList.length === 0) {
-        const offRes = searchOfflineLexicon(cleanWord);
-        setEnglishCategories(offRes.pos || []);
-      } else {
-        setEnglishCategories(formattedPosList);
-      }
+      setEnglishCategories(formattedPosList);
 
       // 4. Aggregate Synonyms
       const collectedSynonyms = new Set();
@@ -293,8 +212,7 @@ export const DictionaryView = () => {
       setAntonymsList(Array.from(collectedAntonyms).slice(0, 10));
 
     } catch (err) {
-      console.warn('Online dictionary fetch error, falling back to Offline Lexicon:', err);
-      applyOfflineLexiconResult(cleanWord);
+      console.error('Fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -324,7 +242,7 @@ export const DictionaryView = () => {
   };
 
   const playSpeechSynthesis = () => {
-    if ('speechSynthesis' in window) {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(activeWord);
       utterance.lang = 'en-US';
       window.speechSynthesis.speak(utterance);
@@ -344,7 +262,6 @@ export const DictionaryView = () => {
         }
       }
     }
-    // Fallback clean English example sentence
     return `She looked up the definition of "${activeWord}" to complete her homework assignment.`;
   };
 
@@ -357,10 +274,10 @@ export const DictionaryView = () => {
     } else {
       const newBookmark = {
         word: activeWord,
-        bengali: bengaliTranslation?.primary || 'বাংলা অর্থ',
-        phonetic: wordData?.phonetic || bengaliTranslation?.phonetic || '',
-        partOfSpeech: wordData?.meanings?.[0]?.partOfSpeech || 'word',
-        definition: wordData?.meanings?.[0]?.definitions?.[0]?.definition || 'Definition saved.',
+        bengali: bengaliTranslation?.primary || 'অধ্যবসায়',
+        phonetic: bengaliTranslation?.phonetic || activeWord,
+        partOfSpeech: wordData?.meanings?.[0]?.partOfSpeech || 'Noun',
+        definition: wordData?.meanings?.[0]?.definitions?.[0]?.definition || `Definition of ${activeWord}`,
         example: getEnglishExampleSentence(),
         addedAt: new Date().toLocaleDateString()
       };
@@ -369,45 +286,53 @@ export const DictionaryView = () => {
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-4 sm:space-y-6 pb-20 lg:pb-12 px-0 overflow-x-hidden">
-      {/* HEADER SECTION */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 bg-white dark:bg-[#0F172A] p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-        <div>
-          <h1 className="text-lg sm:text-3xl font-black text-slate-900 dark:text-white flex items-center gap-2.5 sm:gap-3">
-            <span className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md">
-              <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
-            </span>
-            <span>English & Bengali Dictionary</span>
-          </h1>
-          <p className="text-[11px] sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+    <div className="w-full max-w-5xl mx-auto space-y-4 sm:space-y-6 animate-in fade-in duration-300 pb-16">
+      
+      {/* DICTIONARY HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#0F172A] p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950 flex items-center justify-center text-blue-600 dark:text-blue-400">
+              <BookOpen className="w-4 h-4" />
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              English & Bengali Dictionary
+            </h1>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
             Search vocabulary for instant English definitions, Bengali meanings (বাংলা অর্থ), synonyms & antonyms.
           </p>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl shrink-0 w-full sm:w-auto">
+        {/* TAB CONTROLS */}
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl sm:rounded-2xl shrink-0 self-start sm:self-center">
           <button
             onClick={() => setActiveTab('search')}
-            className={`flex-1 sm:flex-initial px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer text-center ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'search'
-                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            🔍 Search Dictionary
+            <Search className="w-3.5 h-3.5" />
+            <span>Search Dictionary</span>
           </button>
+          
           <button
             onClick={() => setActiveTab('saved')}
-            className={`flex-1 sm:flex-initial px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'saved'
-                ? 'bg-white dark:bg-slate-700 text-amber-500 shadow-xs'
+                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <span>⭐ My Vocabulary</span>
-            <span className="text-[10px] bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-300 px-1.5 py-0.5 rounded-full">
-              {bookmarks.length}
-            </span>
+            <Bookmark className="w-3.5 h-3.5" />
+            <span>My Vocabulary</span>
+            {bookmarks.length > 0 && (
+              <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center">
+                {bookmarks.length}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -415,14 +340,14 @@ export const DictionaryView = () => {
       {activeTab === 'search' ? (
         <>
           {/* SEARCH INPUT */}
-          <div className="bg-white dark:bg-[#0F172A] p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm relative">
+          <div className="bg-white dark:bg-[#0F172A] p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
             <form onSubmit={handleSearchSubmit} className="relative flex items-center">
               <Search className="absolute left-3.5 sm:left-4 w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
               <input
                 type="text"
                 value={searchTerm}
-                onChange={handleSearchInputChange}
-                placeholder="Search any English word offline (e.g. Book, Perseverance)..."
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search any English word (e.g. Book, Perseverance)..."
                 className="w-full h-10 sm:h-12 pl-9 sm:pl-12 pr-20 sm:pr-28 rounded-xl sm:rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-600 dark:focus:border-blue-500 shadow-inner"
               />
               <button
@@ -433,35 +358,7 @@ export const DictionaryView = () => {
                 {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <span>Search</span>}
               </button>
             </form>
-
-            {/* LIVE AUTOCOMPLETE DROPDOWN */}
-            {autocompleteSuggestions.length > 0 && (
-              <div className="absolute left-3 right-3 top-full mt-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl z-30 overflow-hidden">
-                {autocompleteSuggestions.map((sug, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      setSearchTerm(sug);
-                      setAutocompleteSuggestions([]);
-                      fetchWordDetails(sug);
-                    }}
-                    className="w-full text-left px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800 flex items-center justify-between border-b last:border-0 border-slate-100 dark:border-slate-800 cursor-pointer"
-                  >
-                    <span className="capitalize">{sug}</span>
-                    <span className="text-[10px] text-slate-400">Offline Lexicon</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
-
-          {/* OFFLINE STATUS BADGE INDICATOR */}
-          {isOfflineMode && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-700 dark:text-amber-400 text-xs font-bold w-fit">
-              <WifiOff className="w-4 h-4 text-amber-500" />
-              <span>100% Offline Mode (Loaded from Local Lexicon)</span>
-            </div>
-          )}
 
           {/* MAIN DICTIONARY RESULT DISPLAY */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -505,173 +402,159 @@ export const DictionaryView = () => {
                 </div>
 
                 {/* BENGALI MEANING HIGHLIGHT BOX (বাংলা অর্থ ও অনুবাদ) */}
-                <div className="bengali-translation-box p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border space-y-2.5 sm:space-y-3 shadow-xs">
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 dark:from-blue-950/40 dark:to-indigo-950/20 p-4 sm:p-6 rounded-2xl border border-blue-100 dark:border-blue-900/60 space-y-3 shadow-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] sm:text-xs font-black tracking-wider uppercase text-blue-600 dark:text-blue-400">
                       বাংলা অর্থ (BENGALI TRANSLATION)
                     </span>
-                  </div>
-
-                  <div className="space-y-1.5 sm:space-y-2">
-                    {/* Primary Bengali Meaning */}
-                    <div className="flex items-baseline gap-3">
-                      <h3 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-                        {bengaliTranslation?.primary || activeWord}
-                      </h3>
-                    </div>
-
-                    {/* English Part of Speech Categories (Noun, Adjective, Adverb, Verb...) */}
-                    {englishCategories && englishCategories.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 sm:gap-2 pt-1.5">
-                        {englishCategories.map((cat, cIdx) => (
-                          <div key={cIdx} className="bengali-cat-pill text-[11px] sm:text-xs font-medium flex items-start sm:items-center gap-1.5 px-2.5 py-1 rounded-lg sm:rounded-xl border shadow-xs leading-tight">
-                            <span className="font-bold text-blue-600 dark:text-blue-400 capitalize shrink-0">{cat.pos}:</span>
-                            <span className="text-slate-800 dark:text-slate-200 break-words">{cat.words.join(', ')}</span>
-                          </div>
-                        ))}
-                      </div>
+                    {bengaliTranslation?.phonetic && (
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                        উচ্চারণ: <span className="font-bold text-slate-800 dark:text-slate-200">{bengaliTranslation.phonetic}</span>
+                      </span>
                     )}
                   </div>
 
-                  {/* STRICT ENGLISH SENTENCE EXAMPLE */}
-                  <div className="pt-2 sm:pt-3 border-t border-blue-200/60 dark:border-slate-700/80 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-200">
-                    <span className="font-bold text-amber-600 dark:text-amber-400">💡 Example (English): </span>
-                    <span className="italic text-slate-700 dark:text-slate-300 leading-normal">"{getEnglishExampleSentence()}"</span>
+                  <h3 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white leading-tight">
+                    {bengaliTranslation?.primary || activeWord}
+                  </h3>
+
+                  {/* ENGLISH EXAMPLE SENTENCE */}
+                  <div className="pt-2 border-t border-blue-200/60 dark:border-blue-900/40">
+                    <p className="text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300 italic flex items-start gap-1.5">
+                      <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <span><strong className="not-italic text-slate-900 dark:text-white font-bold">Example (English):</strong> "{getEnglishExampleSentence()}"</span>
+                    </p>
                   </div>
                 </div>
 
-                {/* DETAILED ENGLISH DEFINITIONS & PARTS OF SPEECH */}
-                {wordData?.meanings ? (
-                  <div className="space-y-6 pt-2">
-                    <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
-                      English Definitions & Usages
-                    </h4>
+                {/* ENGLISH DEFINITIONS & USAGES */}
+                <div className="space-y-3 pt-2">
+                  <h4 className="text-xs font-black tracking-wider uppercase text-slate-400 dark:text-slate-500">
+                    ENGLISH DEFINITIONS & USAGES
+                  </h4>
 
-                    {wordData.meanings.map((meaning, mIdx) => (
-                      <div key={mIdx} className="space-y-3 pb-5 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
-                        <div className="flex items-center gap-2">
-                          <span className="px-3 py-1 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs font-black capitalize">
+                  {wordData?.meanings ? (
+                    <div className="space-y-4">
+                      {wordData.meanings.map((meaning, mIdx) => (
+                        <div key={mIdx} className="space-y-2">
+                          <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-extrabold capitalize">
                             {meaning.partOfSpeech}
                           </span>
-                        </div>
 
-                        <ul className="space-y-2.5 pl-2">
-                          {meaning.definitions.slice(0, 3).map((def, dIdx) => (
-                            <li key={dIdx} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 space-y-1">
-                              <div className="flex items-start gap-2">
-                                <span className="text-blue-500 font-bold">•</span>
-                                <span className="font-medium leading-relaxed">{def.definition}</span>
-                              </div>
-                              {def.example && (
-                                <p className="pl-4 text-xs font-normal text-slate-500 dark:text-slate-400 italic">
-                                  "{def.example}"
+                          <ul className="space-y-2 pl-2">
+                            {meaning.definitions?.map((def, dIdx) => (
+                              <li key={dIdx} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 space-y-1">
+                                <p className="font-medium flex items-start gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0 mt-1.5" />
+                                  <span>{def.definition}</span>
                                 </p>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  !loading && (
-                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-500 dark:text-slate-400">
-                      Standard English dictionary entry loaded. Check the Bengali meaning and definitions above.
+                                {def.example && (
+                                  <p className="text-xs text-slate-500 dark:text-slate-400 pl-3.5 italic">
+                                    "{def.example}"
+                                  </p>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
                     </div>
-                  )
-                )}
+                  ) : (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Searching complete dictionary entry...
+                    </p>
+                  )}
+                </div>
 
               </div>
             </div>
 
-            {/* RIGHT COLUMN: SYNONYMS, ANTONYMS & RECENT HISTORY */}
+            {/* RIGHT COLUMN: SYNONYMS, ANTONYMS & RECENT SEARCHES */}
             <div className="space-y-4 sm:space-y-6">
               
               {/* SYNONYMS & ANTONYMS CARD */}
-              <div className="bg-white dark:bg-[#0F172A] p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4 sm:space-y-5">
-                <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-indigo-500" />
+              <div className="bg-white dark:bg-[#0F172A] p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                   <span>Synonyms & Antonyms</span>
                 </h3>
 
-                {/* English Synonyms */}
-                <div className="space-y-1.5 sm:space-y-2">
-                  <span className="text-[10px] sm:text-xs font-extrabold text-slate-400 uppercase tracking-wider">
-                    Synonyms (সমার্থবোধক শব্দ)
+                {/* SYNONYMS */}
+                <div className="space-y-2">
+                  <span className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                    SYNONYMS (সমার্থকবোধক শব্দ)
                   </span>
-                  <div className="flex flex-wrap gap-1 sm:gap-1.5">
-                    {synonymsList.length > 0 ? (
-                      synonymsList.map((syn, idx) => (
+                  {synonymsList.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {synonymsList.map((syn, idx) => (
                         <button
                           key={idx}
                           onClick={() => {
                             setSearchTerm(syn);
                             fetchWordDetails(syn);
                           }}
-                          className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer border border-emerald-200 dark:border-emerald-800 hover:scale-105 active:scale-95"
+                          className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 text-xs font-bold cursor-pointer transition-colors border border-emerald-200 dark:border-emerald-800"
                         >
                           {syn}
                         </button>
-                      ))
-                    ) : (
-                      <span className="text-xs text-slate-400 italic">No synonyms available</span>
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No direct synonyms listed</p>
+                  )}
                 </div>
 
-                {/* English Antonyms */}
-                <div className="space-y-1.5 sm:space-y-2 pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] sm:text-xs font-extrabold text-slate-400 uppercase tracking-wider">
-                    Antonyms (বিপরীতার্থক শব্দ)
+                {/* ANTONYMS */}
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <span className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                    ANTONYMS (বিপরীতার্থক শব্দ)
                   </span>
-                  <div className="flex flex-wrap gap-1 sm:gap-1.5">
-                    {antonymsList.length > 0 ? (
-                      antonymsList.map((ant, idx) => (
+                  {antonymsList.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {antonymsList.map((ant, idx) => (
                         <button
                           key={idx}
                           onClick={() => {
                             setSearchTerm(ant);
                             fetchWordDetails(ant);
                           }}
-                          className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer border border-rose-200 dark:border-rose-800 hover:scale-105 active:scale-95"
+                          className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/80 text-rose-700 dark:text-rose-300 text-xs font-bold cursor-pointer transition-colors border border-rose-200 dark:border-rose-800"
                         >
                           {ant}
                         </button>
-                      ))
-                    ) : (
-                      <span className="text-xs text-slate-400 italic">No direct antonyms listed</span>
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No direct antonyms listed</p>
+                  )}
                 </div>
               </div>
 
-              {/* RECENT SEARCH HISTORY CARD */}
-              <div className="bg-white dark:bg-[#0F172A] p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-3 sm:space-y-4">
+              {/* RECENT SEARCHES */}
+              <div className="bg-white dark:bg-[#0F172A] p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
-                    <span>Recent Searches</span>
+                  <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                    Recent Searches
                   </h3>
-                  {searchHistory.length > 0 && (
-                    <button
-                      onClick={() => setSearchHistory([])}
-                      className="text-[10px] sm:text-[11px] font-semibold text-slate-400 hover:text-rose-500 transition-colors"
-                    >
-                      Clear History
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setSearchHistory([])}
+                    className="text-[10px] text-slate-400 hover:text-red-500 font-semibold cursor-pointer"
+                  >
+                    Clear History
+                  </button>
                 </div>
 
-                <div className="flex flex-wrap gap-1 sm:gap-1.5">
-                  {searchHistory.map((item, idx) => (
+                <div className="flex flex-wrap gap-1.5">
+                  {searchHistory.map((word, idx) => (
                     <button
                       key={idx}
                       onClick={() => {
-                        setSearchTerm(item);
-                        fetchWordDetails(item);
+                        setSearchTerm(word);
+                        fetchWordDetails(word);
                       }}
-                      className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl bg-slate-100 hover:bg-blue-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] sm:text-xs font-medium transition-all cursor-pointer flex items-center gap-1 border border-slate-200 dark:border-slate-700"
+                      className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-300 text-xs font-medium cursor-pointer transition-colors flex items-center gap-1 border border-slate-200 dark:border-slate-700"
                     >
-                      <span>{item}</span>
+                      <span>{word}</span>
                       <ArrowRight className="w-3 h-3 text-slate-400" />
                     </button>
                   ))}
@@ -679,91 +562,81 @@ export const DictionaryView = () => {
               </div>
 
             </div>
+
           </div>
         </>
       ) : (
-        /* SAVED VOCABULARY BOOKMARKS VIEW */
-        <div className="bg-white dark:bg-[#0F172A] p-6 sm:p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+        /* SAVED VOCABULARY TAB */
+        <div className="bg-white dark:bg-[#0F172A] p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
             <div>
-              <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <span>⭐ My Saved Vocabulary Flashcards</span>
+              <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">
+                Saved Vocabulary List
               </h2>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-                Review your saved exam words and test your memory.
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Your bookmarked words for quick revision and exam preparation.
               </p>
             </div>
-            <span className="text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-xl">
+            <span className="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 text-xs font-bold border border-blue-200 dark:border-blue-800">
               {bookmarks.length} Words Saved
             </span>
           </div>
 
-          {bookmarks.length === 0 ? (
-            <div className="text-center py-12 space-y-3">
-              <Bookmark className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto" />
-              <h3 className="text-base font-bold text-slate-700 dark:text-slate-300">No Saved Vocabulary Yet</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                Search words in the dictionary and click "Save Word" to add them to your personalized study list!
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {bookmarks.map((bm, idx) => (
+          {bookmarks.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {bookmarks.map((item, idx) => (
                 <div
                   key={idx}
-                  className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3 flex flex-col justify-between hover:border-blue-400 transition-all group"
+                  className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-3 relative group"
                 >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-lg font-black text-slate-900 dark:text-white capitalize">
-                        {bm.word}
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 px-2 py-0.5 rounded">
+                        {item.partOfSpeech}
+                      </span>
+                      <h3 className="text-lg font-black text-slate-900 dark:text-white mt-1 capitalize">
+                        {item.word}
                       </h3>
-                      <button
-                        onClick={() => setBookmarks(prev => prev.filter(b => b.word !== bm.word))}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-all cursor-pointer"
-                        title="Remove Bookmark"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-xs font-black">
-                      🇧🇩 {bm.bengali}
-                    </div>
-
-                    <p className="text-xs font-medium text-slate-600 dark:text-slate-300 line-clamp-3">
-                      {bm.definition}
-                    </p>
-
-                    {bm.example && (
-                      <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400 italic">
-                        "{bm.example}"
+                      <p className="text-sm font-bold text-blue-600 dark:text-blue-400 mt-0.5">
+                        বাংলা অর্থ: {item.bengali}
                       </p>
-                    )}
-                  </div>
+                    </div>
 
-                  <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[11px] text-slate-400">
-                    <span>Added {bm.addedAt}</span>
                     <button
-                      onClick={() => {
-                        setActiveTab('search');
-                        setSearchTerm(bm.word);
-                        fetchWordDetails(bm.word);
-                      }}
-                      className="font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-0.5"
+                      onClick={() => setBookmarks(prev => prev.filter(b => b.word.toLowerCase() !== item.word.toLowerCase()))}
+                      className="p-1.5 text-slate-400 hover:text-red-500 cursor-pointer"
+                      title="Remove Bookmark"
                     >
-                      <span>Study Word</span>
-                      <ArrowRight className="w-3 h-3" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
+
+                  <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                    {item.definition}
+                  </p>
+
+                  {item.example && (
+                    <p className="text-xs text-slate-500 italic bg-white dark:bg-slate-800/80 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                      "{item.example}"
+                    </p>
+                  )}
                 </div>
               ))}
+            </div>
+          ) : (
+            <div className="p-12 text-center space-y-3">
+              <Bookmark className="w-10 h-10 text-slate-300 mx-auto" />
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                No saved vocabulary words yet
+              </p>
+              <p className="text-xs text-slate-400">
+                Tap the "Save Word" button when searching dictionary terms to save them here!
+              </p>
             </div>
           )}
         </div>
       )}
+
     </div>
   );
 };
-
-export default DictionaryView;
