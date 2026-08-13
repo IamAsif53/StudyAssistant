@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   FolderOpen, FileText, Download, ExternalLink, Trash2, Plus,
-  X, File, FileCode, Image, FileArchive, Search, Eye, Maximize2
+  X, File, FileCode, Image, FileArchive, Search, Eye, Maximize2, Sparkles, Check
 } from 'lucide-react';
 
-// Sample HTML / PDF Document Data Generator
+// Sample HTML / Document Data Generator
 const createSampleDocData = (title, content) => {
   const htmlContent = `
     <!DOCTYPE html>
@@ -14,11 +14,11 @@ const createSampleDocData = (title, content) => {
       <meta charset="utf-8">
       <title>${title}</title>
       <style>
-        body { font-family: system-ui, -apple-system, sans-serif; padding: 30px; line-height: 1.6; color: #1e293b; background: #f8fafc; }
-        .card { max-width: 800px; margin: 0 auto; background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
-        h1 { color: #2563eb; font-size: 24px; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; }
-        .badge { background: #eff6ff; color: #2563eb; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; }
-        pre { background: #f1f5f9; padding: 16px; border-radius: 8px; font-size: 14px; white-space: pre-wrap; }
+        body { font-family: system-ui, -apple-system, sans-serif; padding: 24px; line-height: 1.6; color: #1e293b; background: #f8fafc; }
+        .card { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        h1 { color: #2563eb; font-size: 22px; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; margin-top: 0; }
+        .badge { background: #eff6ff; color: #2563eb; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; display: inline-block; margin-bottom: 12px; }
+        pre { background: #f1f5f9; padding: 16px; border-radius: 8px; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
       </style>
     </head>
     <body>
@@ -26,7 +26,7 @@ const createSampleDocData = (title, content) => {
         <span class="badge">Study Material</span>
         <h1>${title}</h1>
         <pre>${content}</pre>
-        <p style="text-align:center; color:#94a3b8; font-size:12px; margin-top:40px;">Smart Study Planner - Academic Resource Document</p>
+        <p style="text-align:center; color:#94a3b8; font-size:12px; margin-top:30px;">Smart Study Planner - Academic Resource Document</p>
       </div>
     </body>
     </html>
@@ -37,11 +37,11 @@ const createSampleDocData = (title, content) => {
 const INITIAL_RESOURCES = [
   {
     id: 'res-sample-1',
-    title: 'Right Form of Verbs Board Analysis',
+    title: 'Right form of verb Board Analysis',
     subjectName: 'English',
-    fileName: 'Right_Form_of_Verbs_Board_Analysis.html',
-    fileSize: '293.8 KB',
-    fileType: 'text/html',
+    fileName: 'RightFormOfVerbsFinalRules.PDF',
+    fileSize: '199.5 KB',
+    fileType: 'application/pdf',
     fileData: createSampleDocData(
       'Right Form of Verbs Board Analysis',
       `1. Subject-Verb Agreement Rules:
@@ -53,15 +53,15 @@ const INITIAL_RESOURCES = [
 - If 'yesterday', 'ago', 'last night' are present, use Past Indefinite Tense.
 - If 'just', 'already', 'yet', 'recently' are present, use Present Perfect Tense.`
     ),
-    uploadDate: '2026-08-12'
+    uploadDate: '2026-08-13'
   },
   {
     id: 'res-sample-2',
     title: 'Mathematics Calculus Formula Sheet',
     subjectName: 'Mathematics',
-    fileName: 'Calculus_Formulas_Master.html',
+    fileName: 'Calculus_Formulas_Master.pdf',
     fileSize: '1.2 MB',
-    fileType: 'text/html',
+    fileType: 'application/pdf',
     fileData: createSampleDocData(
       'Mathematics Calculus Formula Sheet',
       `DIFFERENTIATION FORMULAS:
@@ -77,32 +77,13 @@ INTEGRATION FORMULAS:
 3. ∫ e^x dx = e^x + C`
     ),
     uploadDate: '2026-08-10'
-  },
-  {
-    id: 'res-sample-3',
-    title: 'Physics Mechanics Notes & Diagrams',
-    subjectName: 'Physics',
-    fileName: 'Physics_Mechanics_Notes.html',
-    fileSize: '850 KB',
-    fileType: 'text/html',
-    fileData: createSampleDocData(
-      'Physics Mechanics Notes & Diagrams',
-      `NEWTON'S LAWS OF MOTION:
-First Law: An object remains at rest or in uniform motion unless acted upon by an external net force.
-Second Law: Force = mass * acceleration (F = m * a).
-Third Law: To every action, there is an equal and opposite reaction.
-
-MOMENTUM & IMPULSE:
-Linear Momentum (p) = mass * velocity (m * v).`
-    ),
-    uploadDate: '2026-08-11'
   }
 ];
 
 export const ResourcesView = () => {
   const [resources, setResources] = useState(() => {
     try {
-      const saved = localStorage.getItem('ssp_real_resources');
+      const saved = localStorage.getItem('ssp_real_resources_v2');
       return saved !== null ? JSON.parse(saved) : INITIAL_RESOURCES;
     } catch (e) {
       return INITIAL_RESOURCES;
@@ -110,12 +91,13 @@ export const ResourcesView = () => {
   });
 
   useEffect(() => {
-    localStorage.setItem('ssp_real_resources', JSON.stringify(resources));
+    localStorage.setItem('ssp_real_resources_v2', JSON.stringify(resources));
   }, [resources]);
 
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [previewResource, setPreviewResource] = useState(null);
+  const [downloadSuccessMsg, setDownloadSuccessMsg] = useState(null);
 
   // Upload Form Fields
   const [title, setTitle] = useState('');
@@ -190,16 +172,14 @@ export const ResourcesView = () => {
     reader.readAsDataURL(selectedFile);
   };
 
-  // Cross-Platform Universal File Downloader
-  const handleDownloadFile = (resource) => {
-    if (!resource.fileData) return;
-
+  // Helper to convert Data URI to Blob
+  const dataURItoBlob = (dataURI) => {
+    if (!dataURI || typeof dataURI !== 'string') return null;
     try {
-      let blob = null;
-      if (resource.fileData.startsWith('data:')) {
-        const parts = resource.fileData.split(',');
+      if (dataURI.startsWith('data:')) {
+        const parts = dataURI.split(',');
         const mimeMatch = parts[0].match(/:(.*?);/);
-        const mime = mimeMatch ? mimeMatch[1] : (resource.fileType || 'application/pdf');
+        const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
         
         let byteString;
         if (parts[0].indexOf('base64') >= 0) {
@@ -213,60 +193,81 @@ export const ResourcesView = () => {
         for (let i = 0; i < byteString.length; i++) {
           ia[i] = byteString.charCodeAt(i);
         }
-        blob = new Blob([ab], { type: mime });
+        return new Blob([ab], { type: mime });
       } else {
-        blob = new Blob([resource.fileData], { type: resource.fileType || 'application/pdf' });
+        return new Blob([dataURI], { type: 'application/pdf' });
+      }
+    } catch (e) {
+      console.error('Blob conversion error:', e);
+      return null;
+    }
+  };
+
+  // Cross-Platform Universal File Downloader for Android & Web
+  const handleDownloadFile = (resource) => {
+    if (!resource?.fileData) return;
+
+    try {
+      const blob = dataURItoBlob(resource.fileData);
+      const downloadName = resource.fileName || `${resource.title}.pdf`;
+
+      if (blob) {
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = downloadName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+
+        setDownloadSuccessMsg(`Downloading ${downloadName}...`);
+        setTimeout(() => setDownloadSuccessMsg(null), 3000);
+
+        setTimeout(() => {
+          if (document.body.contains(link)) {
+            document.body.removeChild(link);
+          }
+          URL.revokeObjectURL(blobUrl);
+        }, 2000);
+        return;
       }
 
-      const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = resource.fileName || `${resource.title}.pdf`;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-
-      setTimeout(() => {
-        if (document.body.contains(link)) {
-          document.body.removeChild(link);
-        }
-        URL.revokeObjectURL(blobUrl);
-      }, 2000);
-    } catch (e) {
-      console.error('Download error:', e);
-      // Fallback Direct Data URL Anchor
+      // Fallback Direct Data URL Link
       const link = document.createElement('a');
       link.href = resource.fileData;
-      link.download = resource.fileName || `${resource.title}.pdf`;
+      link.download = downloadName;
       link.target = '_blank';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      setDownloadSuccessMsg(`Downloading ${downloadName}...`);
+      setTimeout(() => setDownloadSuccessMsg(null), 3000);
+    } catch (e) {
+      console.error('Download error:', e);
+      window.open(resource.fileData, '_blank');
     }
   };
 
   // Open Document in In-App Preview Modal
   const handleOpenFile = (resource) => {
-    if (!resource.fileData) return;
+    if (!resource?.fileData) return;
     setPreviewResource(resource);
   };
 
   // Open Document in New Native Browser Window
   const handleOpenInNewTab = (resource) => {
     if (!resource?.fileData) return;
-    const win = window.open();
-    if (win) {
-      win.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head><title>${resource.title}</title></head>
-        <body style="margin:0;padding:0;background:#0f172a;">
-          <iframe src="${resource.fileData}" style="width:100vw;height:100vh;border:none;"></iframe>
-        </body>
-        </html>
-      `);
-    } else {
-      window.location.href = resource.fileData;
+    try {
+      const blob = dataURItoBlob(resource.fileData);
+      if (blob) {
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, '_blank');
+        return;
+      }
+      window.open(resource.fileData, '_blank');
+    } catch (e) {
+      window.open(resource.fileData, '_blank');
     }
   };
 
@@ -283,8 +284,16 @@ export const ResourcesView = () => {
   });
 
   return (
-    <div className="w-full max-w-full space-y-4 sm:space-y-6 animate-in fade-in duration-500 pb-16 overflow-x-hidden">
+    <div className="w-full max-w-full space-y-4 sm:space-y-6 animate-in fade-in duration-500 pb-16 overflow-x-hidden relative">
       
+      {/* Toast Notification Banner for Downloads */}
+      {downloadSuccessMsg && (
+        <div className="fixed top-4 right-4 z-50 bg-emerald-600 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2 text-xs font-bold animate-in slide-in-from-top-5">
+          <Check className="w-4 h-4" />
+          <span>{downloadSuccessMsg}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#0F172A] rounded-xl p-5 border border-[#E5E7EB] dark:border-slate-800 shadow-xs">
         <div>
@@ -437,7 +446,7 @@ export const ResourcesView = () => {
                 <button
                   onClick={() => handleOpenInNewTab(previewResource)}
                   className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 cursor-pointer"
-                  title="Open in New Tab"
+                  title="Open in Browser Tab"
                 >
                   <ExternalLink className="w-4 h-4" />
                 </button>
@@ -451,14 +460,68 @@ export const ResourcesView = () => {
               </div>
             </div>
 
-            {/* MODAL PREVIEW BODY */}
-            <div className="flex-1 w-full bg-slate-900 p-1 relative overflow-auto flex items-center justify-center">
-              <iframe
-                src={previewResource.fileData}
-                title={previewResource.title}
-                className="w-full h-full border-none rounded-xl bg-white"
-              />
+            {/* MODAL PREVIEW BODY - UNIVERSAL DOCUMENT & PDF VIEWER */}
+            <div className="flex-1 w-full bg-slate-950 p-3 sm:p-6 overflow-y-auto flex flex-col items-center justify-center relative">
+              
+              {/* PDF Document Interactive Card */}
+              <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-5 my-auto">
+                <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center mx-auto shadow-lg">
+                  <FileText className="w-8 h-8" />
+                </div>
+
+                <div className="space-y-1">
+                  <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-bold border border-blue-500/20 inline-block">
+                    {previewResource.subjectName}
+                  </span>
+                  <h4 className="text-lg sm:text-xl font-black text-white pt-2">
+                    {previewResource.title}
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    📄 {previewResource.fileName} • {previewResource.fileSize}
+                  </p>
+                </div>
+
+                <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60 text-left space-y-2">
+                  <p className="text-xs font-bold text-slate-300">
+                    📱 Document Reading Options:
+                  </p>
+                  <ul className="text-[11px] text-slate-400 space-y-1 list-disc pl-4">
+                    <li>Tap <strong>"Download PDF File"</strong> to save directly into your phone's Download folder.</li>
+                    <li>Tap <strong>"Open PDF in External Viewer"</strong> to launch with Google PDF Viewer or Drive.</li>
+                  </ul>
+                </div>
+
+                {/* Primary Mobile Action Buttons */}
+                <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                  <button
+                    onClick={() => handleDownloadFile(previewResource)}
+                    className="w-full py-3 px-5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download PDF File</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleOpenInNewTab(previewResource)}
+                    className="w-full py-3 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 border border-slate-700 cursor-pointer transition-all"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Open in External Viewer</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* In-Line iframe viewer for desktop & supported webviews */}
+              <div className="w-full h-full min-h-[300px] mt-4 hidden md:block border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                <iframe
+                  src={previewResource.fileData}
+                  title={previewResource.title}
+                  className="w-full h-full border-none bg-white"
+                />
+              </div>
+
             </div>
+
           </div>
         </div>
       )}

@@ -254,8 +254,8 @@ export const RelaxationView = () => {
                 Tap or click floating bubbles to relieve stress and tension.
               </p>
             </div>
-            <div className="text-right">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block">Popped</span>
+            <div className="text-right shrink-0 min-w-[70px]">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 block whitespace-nowrap">Popped</span>
               <span className="text-xl font-black text-purple-600 dark:text-purple-400">{poppedCount}</span>
             </div>
           </div>
