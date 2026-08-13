@@ -10,6 +10,7 @@ import { AchievementsView } from './components/achievements/AchievementsView';
 import { ResourcesView } from './components/resources/ResourcesView';
 import { SyllabusView } from './components/syllabus/SyllabusView';
 import { DictionaryView } from './components/dictionary/DictionaryView';
+import { RelaxationView } from './components/relaxation/RelaxationView';
 import { QuickAddModal } from './components/layout/QuickAddModal';
 
 const AppContent = () => {
@@ -26,6 +27,7 @@ const AppContent = () => {
       case 'notes': return <NotesView />;
       case 'achievements': return <AchievementsView />;
       case 'resources': return <ResourcesView />;
+      case 'relaxation': return <RelaxationView />;
       default: return <PlannerView />;
     }
   };

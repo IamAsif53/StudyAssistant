@@ -2,7 +2,7 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   Calendar as CalendarIcon, CheckSquare, GraduationCap,
-  FileText, Folder, BookCheck, BookOpen, X
+  FileText, Folder, BookCheck, BookOpen, X, Gamepad2
 } from 'lucide-react';
 
 export const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
@@ -15,7 +15,8 @@ export const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
     { id: 'exams', label: 'Exams', icon: GraduationCap },
     { id: 'notes', label: 'Notes', icon: FileText },
     { id: 'resources', label: 'Resources', icon: Folder },
-    { id: 'dictionary', label: 'Dictionary', icon: BookOpen }
+    { id: 'dictionary', label: 'Dictionary', icon: BookOpen },
+    { id: 'relaxation', label: 'Study Break (Relax)', icon: Gamepad2 }
   ];
 
   const handleSelectTab = (id) => {
@@ -106,6 +107,7 @@ export const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
           { id: 'homework', label: 'Homework', icon: CheckSquare },
           { id: 'exams', label: 'Exams', icon: GraduationCap },
           { id: 'notes', label: 'Notes', icon: FileText },
+          { id: 'relaxation', label: 'Relax', icon: Gamepad2 }
         ].map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
