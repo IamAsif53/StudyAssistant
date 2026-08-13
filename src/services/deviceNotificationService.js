@@ -12,37 +12,44 @@ const DAYS_MAP = {
 
 // Helper: Calculate target Date for next upcoming day of week & time (HH:mm)
 const getNextDateForDayAndTime = (dayName, time24) => {
+  if (!dayName || !DAYS_MAP.hasOwnProperty(dayName)) return null;
   const targetDayIdx = DAYS_MAP[dayName];
-  if (targetDayIdx === undefined) return null;
 
-  const now = new Date();
-  const currentDayIdx = now.getDay();
-  const [hours, minutes] = (time24 || '09:00').split(':').map(Number);
+  try {
+    const now = new Date();
+    const currentDayIdx = now.getDay();
+    const [hours, minutes] = (time24 || '09:00').split(':').map(Number);
 
-  let daysAhead = targetDayIdx - currentDayIdx;
-  if (daysAhead < 0) {
-    daysAhead += 7;
-  } else if (daysAhead === 0) {
-    // If today is the day, check if time has already passed today
-    const targetToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
-    if (targetToday.getTime() <= now.getTime() + 60000) {
-      daysAhead = 7; // Schedule for next week
+    if (isNaN(hours) || isNaN(minutes)) return null;
+
+    let daysAhead = targetDayIdx - currentDayIdx;
+    if (daysAhead < 0) {
+      daysAhead += 7;
+    } else if (daysAhead === 0) {
+      const targetToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
+      if (targetToday.getTime() <= now.getTime() + 60000) {
+        daysAhead = 7;
+      }
     }
-  }
 
-  const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysAhead, hours, minutes, 0);
-  return targetDate;
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysAhead, hours, minutes, 0);
+  } catch (e) {
+    return null;
+  }
 };
 
 // Helper: Parse Exam Date & Time string into Date object
 const parseExamDateTime = (dateStr, timeStr) => {
-  if (!dateStr) return null;
+  if (!dateStr || typeof dateStr !== 'string') return null;
   try {
-    const [year, month, day] = dateStr.split('-').map(Number);
+    const parts = dateStr.split('-').map(Number);
+    if (parts.length < 3 || parts.some(isNaN)) return null;
+    const [year, month, day] = parts;
+    
     let hours = 9;
     let minutes = 0;
 
-    if (timeStr) {
+    if (timeStr && typeof timeStr === 'string') {
       const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
       if (match) {
         let h = parseInt(match[1], 10);
@@ -63,6 +70,7 @@ const parseExamDateTime = (dateStr, timeStr) => {
 
 // Helper: Create a deterministic 32-bit positive integer ID for Android Alarms
 const generateAlarmId = (str) => {
+  if (!str) return Math.floor(Math.random() * 1000000);
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
@@ -95,24 +103,22 @@ class DeviceNotificationService {
         }
 
         if (this.hasPermission) {
-          // Register High-Priority Android Alarm Channel (Sound, Vibration, Banner & Lockscreen Visibility)
           await LocalNotifications.createChannel({
             id: 'study_planner_alarms',
             name: 'Study Routine & Exam Alarms',
             description: 'Real-time background status bar alarms for routines, exams, and homework',
-            importance: 5, // MAX / HIGH Importance
+            importance: 5,
             sound: 'res://platform_default',
             vibration: true,
-            visibility: 1 // PUBLIC on lock screen
+            visibility: 1
           });
 
-          // Handle Notification Action Click (Focus app)
           LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
             console.log('[NOTIFICATION] Tapped by user:', action);
             if (window.focus) window.focus();
           });
         }
-      } else if ('Notification' in window) {
+      } else if (typeof window !== 'undefined' && 'Notification' in window) {
         if (Notification.permission === 'granted') {
           this.hasPermission = true;
         } else if (Notification.permission !== 'denied') {
@@ -127,11 +133,11 @@ class DeviceNotificationService {
 
   // Send an immediate notification (when inside app or testing)
   async sendDeviceNotification({ title, body, id, extra = {} }) {
-    await this.init();
-    const notifId = id || Math.floor(Math.random() * 1000000);
+    try {
+      await this.init();
+      const notifId = id || Math.floor(Math.random() * 1000000);
 
-    if (this.isNative && this.hasPermission) {
-      try {
+      if (this.isNative && this.hasPermission) {
         await LocalNotifications.schedule({
           notifications: [
             {
@@ -147,20 +153,18 @@ class DeviceNotificationService {
           ]
         });
         return true;
-      } catch (err) {
-        console.warn('Capacitor LocalNotification schedule error:', err);
       }
-    }
 
-    if ('Notification' in window && Notification.permission === 'granted') {
-      try {
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
         new Notification(title, {
           body: body,
           icon: '/favicon.ico',
           tag: `ssp_notif_${notifId}`
         });
         return true;
-      } catch (e) {}
+      }
+    } catch (e) {
+      console.warn('sendDeviceNotification error:', e);
     }
 
     return false;
@@ -168,19 +172,23 @@ class DeviceNotificationService {
 
   // CENTRALIZED ALARM SYNCHRONIZER FOR ROUTINES, EXAMS & HOMEWORK
   async syncAllAlarms({ weeklyRoutine, exams = [], homework = [], notificationsEnabled = true }) {
-    await this.init();
-
-    if (!this.isNative || !this.hasPermission) {
-      return;
-    }
-
     try {
+      await this.init();
+
+      if (!this.isNative || !this.hasPermission) {
+        return;
+      }
+
       // 1. Cancel all existing pending alarms
-      const pending = await LocalNotifications.getPending();
-      if (pending && pending.notifications && pending.notifications.length > 0) {
-        await LocalNotifications.cancel({
-          notifications: pending.notifications.map(n => ({ id: n.id }))
-        });
+      try {
+        const pending = await LocalNotifications.getPending();
+        if (pending && Array.isArray(pending.notifications) && pending.notifications.length > 0) {
+          await LocalNotifications.cancel({
+            notifications: pending.notifications.map(n => ({ id: n.id }))
+          });
+        }
+      } catch (e) {
+        console.warn('Cancel pending notifications warning:', e);
       }
 
       if (!notificationsEnabled) {
@@ -191,13 +199,15 @@ class DeviceNotificationService {
       const notificationsToSchedule = [];
 
       // 2. Schedule Weekly Routine Alarms (For all 7 Days)
-      if (weeklyRoutine && typeof weeklyRoutine === 'object') {
+      // SAFE CHECK: Ensure weeklyRoutine is non-null object and not array!
+      if (weeklyRoutine && typeof weeklyRoutine === 'object' && !Array.isArray(weeklyRoutine) && weeklyRoutine !== null) {
         Object.keys(weeklyRoutine).forEach((dayName) => {
-          const slots = weeklyRoutine[dayName] || [];
-          slots.forEach((slot) => {
-            if (!slot.startTime || !slot.subjects) return;
+          const slots = weeklyRoutine[dayName];
+          if (!Array.isArray(slots)) return;
 
-            // Target start time date
+          slots.forEach((slot) => {
+            if (!slot || !slot.startTime || !slot.subjects) return;
+
             const targetDate = getNextDateForDayAndTime(dayName, slot.startTime);
             if (targetDate && targetDate.getTime() > Date.now()) {
               // Exact Start Alarm
@@ -232,10 +242,9 @@ class DeviceNotificationService {
       // 3. Schedule Exam Alarms
       if (Array.isArray(exams)) {
         exams.forEach((exam) => {
-          if (!exam.date) return;
+          if (!exam || !exam.date) return;
           const examDate = parseExamDateTime(exam.date, exam.time);
           if (examDate && examDate.getTime() > Date.now()) {
-            // Exam Start Time Alarm
             notificationsToSchedule.push({
               id: generateAlarmId(`exam_${exam.id}`),
               title: `🎯 Exam Starting Now: ${exam.title}`,
@@ -246,7 +255,6 @@ class DeviceNotificationService {
               extra: { type: 'exam', examId: exam.id }
             });
 
-            // 30-minute Exam Reminder
             const date30MinBefore = new Date(examDate.getTime() - 30 * 60 * 1000);
             if (date30MinBefore.getTime() > Date.now()) {
               notificationsToSchedule.push({
@@ -266,7 +274,7 @@ class DeviceNotificationService {
       // 4. Schedule Homework Due Date Alarms
       if (Array.isArray(homework)) {
         homework.forEach((hw) => {
-          if (hw.status === 'Completed' || !hw.dueDate) return;
+          if (!hw || hw.status === 'Completed' || !hw.dueDate) return;
           const hwDate = parseExamDateTime(hw.dueDate, '09:00 AM');
           if (hwDate && hwDate.getTime() > Date.now()) {
             notificationsToSchedule.push({
@@ -284,7 +292,6 @@ class DeviceNotificationService {
 
       // 5. Register all system alarms with Capacitor LocalNotifications
       if (notificationsToSchedule.length > 0) {
-        // Schedule in chunks of 50 to adhere to Android limits
         const chunkSize = 40;
         for (let i = 0; i < notificationsToSchedule.length; i += chunkSize) {
           const chunk = notificationsToSchedule.slice(i, i + chunkSize);

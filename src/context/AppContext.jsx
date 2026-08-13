@@ -216,19 +216,25 @@ export const AppProvider = ({ children }) => {
 
   // Auto-Sync Native Background Android Alarms for Routines, Exams & Homework
   useEffect(() => {
-    try {
-      const weeklyRoutine = safeJSONParse('ssp_weekly_routine_v3', null);
-      const notificationsEnabled = safeJSONParse('ssp_routine_notifications_enabled', true);
-      
-      deviceNotificationService.syncAllAlarms({
-        weeklyRoutine,
-        exams,
-        homework,
-        notificationsEnabled
-      });
-    } catch (e) {
-      console.warn('Alarm sync error:', e);
-    }
+    const timer = setTimeout(() => {
+      try {
+        const weeklyRoutine = safeJSONParse('ssp_weekly_routine_v3', null);
+        const notificationsEnabled = safeJSONParse('ssp_routine_notifications_enabled', true);
+        
+        if (weeklyRoutine) {
+          deviceNotificationService.syncAllAlarms({
+            weeklyRoutine,
+            exams,
+            homework,
+            notificationsEnabled
+          });
+        }
+      } catch (e) {
+        console.warn('Alarm sync error:', e);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
   }, [exams, homework]);
 
   // Apply Theme Class to Document Root & Body

@@ -132,10 +132,13 @@ export const PlannerView = () => {
 
   useEffect(() => {
     localStorage.setItem('ssp_weekly_routine_v3', JSON.stringify(weeklyRoutine));
-    deviceNotificationService.syncAllAlarms({
-      weeklyRoutine,
-      notificationsEnabled
-    });
+    const timer = setTimeout(() => {
+      deviceNotificationService.syncAllAlarms({
+        weeklyRoutine,
+        notificationsEnabled
+      });
+    }, 500);
+    return () => clearTimeout(timer);
   }, [weeklyRoutine, notificationsEnabled]);
 
   // Notifications Feature Toggle State
