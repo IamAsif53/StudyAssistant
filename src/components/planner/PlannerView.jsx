@@ -130,17 +130,6 @@ export const PlannerView = () => {
     }
   });
 
-  useEffect(() => {
-    localStorage.setItem('ssp_weekly_routine_v3', JSON.stringify(weeklyRoutine));
-    const timer = setTimeout(() => {
-      deviceNotificationService.syncAllAlarms({
-        weeklyRoutine,
-        notificationsEnabled
-      });
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [weeklyRoutine, notificationsEnabled]);
-
   // Notifications Feature Toggle State
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     try {
@@ -154,6 +143,17 @@ export const PlannerView = () => {
   useEffect(() => {
     localStorage.setItem('ssp_routine_notifications_enabled', JSON.stringify(notificationsEnabled));
   }, [notificationsEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('ssp_weekly_routine_v3', JSON.stringify(weeklyRoutine));
+    const timer = setTimeout(() => {
+      deviceNotificationService.syncAllAlarms({
+        weeklyRoutine,
+        notificationsEnabled
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [weeklyRoutine, notificationsEnabled]);
 
   const [activeToast, setActiveToast] = useState(null);
   const notifiedKeysRef = useRef(new Set());
