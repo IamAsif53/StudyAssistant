@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
+import { deviceNotificationService } from '../services/deviceNotificationService';
 
 const AppContext = createContext();
 
@@ -212,6 +213,23 @@ export const AppProvider = ({ children }) => {
     localStorage.setItem('ssp_resources', JSON.stringify(resources));
     localStorage.setItem('ssp_syllabus_progress', JSON.stringify(syllabusProgress));
   }, [userRole, theme, userProfile, subjects, homework, exams, studySessions, notes, flashcards, goals, achievements, resources, syllabusProgress]);
+
+  // Auto-Sync Native Background Android Alarms for Routines, Exams & Homework
+  useEffect(() => {
+    try {
+      const weeklyRoutine = safeJSONParse('ssp_weekly_routine_v3', null);
+      const notificationsEnabled = safeJSONParse('ssp_routine_notifications_enabled', true);
+      
+      deviceNotificationService.syncAllAlarms({
+        weeklyRoutine,
+        exams,
+        homework,
+        notificationsEnabled
+      });
+    } catch (e) {
+      console.warn('Alarm sync error:', e);
+    }
+  }, [exams, homework]);
 
   // Apply Theme Class to Document Root & Body
   useEffect(() => {
