@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Clock, Plus, Edit2, Trash2, X, Check, Bell, BellOff, BellRing, Play } from 'lucide-react';
+import { deviceNotificationService } from '../../services/deviceNotificationService';
 
 const INITIAL_ROUTINE_SLOTS = [
   {
@@ -153,6 +154,7 @@ export const PlannerView = () => {
     playChimeSound();
 
     const titleMessage = `⏰ Routine Alert: ${formatTimeAMPM(slot.startTime)}`;
+    const bodyMessage = `It's ${formatTimeAMPM(slot.startTime)}! Time to study ${slot.subjects}. ${slot.notes ? '(' + slot.notes + ')' : ''}`.trim();
 
     // 1. In-App Floating Toast Banner
     setActiveToast({
@@ -172,17 +174,12 @@ export const PlannerView = () => {
       );
     }
 
-    // 2. System / Browser Device Notification
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      try {
-        new Notification(`⏰ Routine Time: ${slot.subjects}`, {
-          body: `It's ${formatTimeAMPM(slot.startTime)}! Time to study ${slot.subjects}. Let's make it count!`,
-          icon: '/favicon.ico'
-        });
-      } catch (e) {
-        console.error(e);
-      }
-    }
+    // 2. Real Native Device Notification (Status Bar Notification with Audio Sound & Tap to Open App)
+    deviceNotificationService.sendDeviceNotification({
+      title: `⏰ Routine Time: ${slot.subjects}`,
+      body: bodyMessage,
+      id: Math.floor(Math.random() * 1000000)
+    });
   };
 
   // REAL-TIME DEVICE CLOCK MONITOR
