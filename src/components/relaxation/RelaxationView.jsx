@@ -261,7 +261,7 @@ export const RelaxationView = () => {
           </div>
 
           {/* BUBBLE CANVAS CONTAINER */}
-          <div className="relative w-full h-[360px] sm:h-[420px] bg-slate-950/90 dark:bg-slate-950 rounded-2xl overflow-hidden border border-purple-500/20 shadow-inner flex items-center justify-center">
+          <div className="relative w-full h-[360px] sm:h-[420px] bg-[#F1F5F9] dark:bg-[#090D16] rounded-2xl overflow-hidden border border-purple-200 dark:border-purple-500/20 shadow-inner flex items-center justify-center transition-colors duration-300">
             {bubbles.map(bubble => (
               <button
                 key={bubble.id}
@@ -278,7 +278,7 @@ export const RelaxationView = () => {
               </button>
             ))}
 
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-slate-800 text-[11px] text-slate-300 font-medium pointer-events-none">
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-1.5 rounded-full border border-purple-200 dark:border-slate-800 text-[11px] text-purple-700 dark:text-purple-300 font-bold pointer-events-none shadow-xs transition-colors">
               ✨ Tap bubbles to pop & destress
             </div>
           </div>
