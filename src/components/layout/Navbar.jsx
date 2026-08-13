@@ -48,13 +48,18 @@ export const Navbar = ({ onToggleMobileMenu }) => {
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('planner')}>
-            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs">
+          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveTab('planner')}>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs shrink-0">
               <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 fill-white" />
             </div>
-            <span className="font-bold text-sm sm:text-lg text-slate-900 dark:text-white tracking-tight truncate max-w-[180px] sm:max-w-none">
-              Study Assistant
-            </span>
+            <div className="flex flex-col justify-center leading-none">
+              <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white tracking-tight truncate max-w-[180px] sm:max-w-none">
+                Study Assistant
+              </span>
+              <span className="text-[10px] sm:text-[11px] font-bold text-blue-600 dark:text-blue-400 mt-0.5 tracking-tight">
+                by Jiaul Asif
+              </span>
+            </div>
           </div>
         </div>
 
