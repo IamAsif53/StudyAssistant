@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   Search, Volume2, Bookmark, BookmarkCheck, Sparkles, BookOpen,
-  ArrowRight, RefreshCw, Trash2, Tag, Lightbulb
+  ArrowRight, RefreshCw, Trash2, Tag, Lightbulb, WifiOff
 } from 'lucide-react';
+import { searchOfflineLexicon, OFFLINE_DICTIONARY } from '../../data/offlineLexiconData';
 
 // Quick Popular Academic Words for Students
 const SUGGESTED_WORDS = [
   'Book', 'Perseverance', 'Photosynthesis', 'Hypothesis', 'Velocity',
-  'Catalyst', 'Equation', 'Osmosis', 'Momentum'
+  'Catalyst', 'Equation', 'Osmosis', 'Momentum', 'Algorithm', 'Biodiversity'
 ];
 
 export const DictionaryView = () => {
@@ -20,6 +21,8 @@ export const DictionaryView = () => {
   const [synonymsList, setSynonymsList] = useState([]);
   const [antonymsList, setAntonymsList] = useState([]);
   const [activeTab, setActiveTab] = useState('search'); // 'search' | 'saved'
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState([]);
 
   // Bookmarked vocabulary list stored in localStorage
   const [bookmarks, setBookmarks] = useState(() => {
@@ -59,7 +62,56 @@ export const DictionaryView = () => {
     localStorage.setItem('ssp_vocab_history', JSON.stringify(searchHistory));
   }, [searchHistory]);
 
-  // Main Comprehensive Fetch Routine
+  // Live Offline Autocomplete Search Filtering
+  const handleSearchInputChange = (e) => {
+    const val = e.target.value;
+    setSearchTerm(val);
+
+    if (val.trim().length >= 1) {
+      const cleanVal = val.trim().toLowerCase();
+      const allDictKeys = Object.keys(OFFLINE_DICTIONARY);
+      const matches = allDictKeys.filter(k => k.startsWith(cleanVal)).slice(0, 6);
+      setAutocompleteSuggestions(matches);
+    } else {
+      setAutocompleteSuggestions([]);
+    }
+  };
+
+  // Helper for applying offline lexicon result
+  const applyOfflineLexiconResult = (cleanWord) => {
+    setIsOfflineMode(true);
+    const offlineResult = searchOfflineLexicon(cleanWord);
+
+    if (offlineResult) {
+      setBengaliTranslation({
+        primary: offlineResult.bengali,
+        phonetic: offlineResult.phonetic || cleanWord
+      });
+
+      setEnglishCategories(offlineResult.pos || []);
+      setSynonymsList(offlineResult.synonyms || []);
+      setAntonymsList(offlineResult.antonyms || []);
+
+      setWordData({
+        word: cleanWord,
+        phonetic: offlineResult.phonetic,
+        meanings: [
+          {
+            partOfSpeech: offlineResult.pos?.[0]?.pos || 'noun',
+            definitions: [
+              {
+                definition: offlineResult.definition,
+                example: offlineResult.example
+              }
+            ],
+            synonyms: offlineResult.synonyms
+          }
+        ]
+      });
+    }
+  };
+
+  // Main Comprehensive Fetch Routine (Online First + 100% Offline Fallback)
   const fetchWordDetails = async (queryWord) => {
     if (!queryWord || !queryWord.trim()) return;
     const cleanWord = queryWord.trim().toLowerCase();
@@ -70,6 +122,8 @@ export const DictionaryView = () => {
     setEnglishCategories([]);
     setSynonymsList([]);
     setAntonymsList([]);
+    setIsOfflineMode(false);
+    setAutocompleteSuggestions([]);
     setActiveWord(queryWord.trim());
 
     // Update Search History
@@ -78,8 +132,15 @@ export const DictionaryView = () => {
       return [queryWord.trim(), ...filtered].slice(0, 10);
     });
 
+    // Check internet connection
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      applyOfflineLexiconResult(cleanWord);
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Execute 5 Concurrent Requests for Fast & Accurate Performance
+      // Execute 5 Concurrent Requests for Fast Online Performance
       const [dictRes, gtRes, synRes, antRes, posRes] = await Promise.allSettled([
         fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanWord)}`),
         fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=bn&dt=t&dt=bd&q=${encodeURIComponent(cleanWord)}`),
@@ -98,27 +159,17 @@ export const DictionaryView = () => {
         }
       }
 
-      // 2. Parse Google Translate Bengali Data
+      // If online API returns nothing, use Offline Lexicon Engine
+      if (!parsedDictData && (gtRes.status !== 'fulfilled' || !gtRes.value.ok)) {
+        applyOfflineLexiconResult(cleanWord);
+        return;
+      }
+
+      // 2. Parse Primary Bengali Translation
       if (gtRes.status === 'fulfilled' && gtRes.value.ok) {
         const gtJson = await gtRes.value.json();
-        
-        // Extract Primary Bengali Translation
         const primaryMeaning = gtJson?.[0]?.[0]?.[0] || cleanWord;
-        
-        // Extract Categorized Bengali Meanings (Noun, Verb, Adjective...)
-        const categories = [];
-        if (Array.isArray(gtJson?.[1])) {
-          gtJson[1].forEach(item => {
-            if (item?.[0] && Array.isArray(item?.[1])) {
-              categories.push({
-                pos: item[0],
-                words: item[1].slice(0, 5)
-              });
-            }
-          });
-        }
 
-        // Generate Phonetic Bangla Transliteration Hint if available
         let phoneticHint = cleanWord;
         if (parsedDictData?.phonetics?.[0]?.text) {
           phoneticHint = parsedDictData.phonetics[0].text;
@@ -126,22 +177,20 @@ export const DictionaryView = () => {
 
         setBengaliTranslation({
           primary: primaryMeaning,
-          categories,
           phonetic: phoneticHint
         });
       } else {
-        // Fallback Bengali Meaning
+        const offRes = searchOfflineLexicon(cleanWord);
         setBengaliTranslation({
-          primary: cleanWord,
-          categories: [],
-          phonetic: cleanWord
+          primary: offRes.bengali,
+          phonetic: offRes.phonetic || cleanWord
         });
       }
 
       // 3. Build English Part of Speech Categories
       const posMap = new Map();
 
-      // A. Extract from Free Dictionary API
+      // Extract from Free Dictionary API
       if (parsedDictData?.meanings) {
         parsedDictData.meanings.forEach(m => {
           if (!m.partOfSpeech) return;
@@ -166,7 +215,7 @@ export const DictionaryView = () => {
         });
       }
 
-      // B. Extract from Datamuse Part of Speech API
+      // Extract from Datamuse Part of Speech API
       if (posRes.status === 'fulfilled' && posRes.value.ok) {
         const posJson = await posRes.value.json();
         if (Array.isArray(posJson)) {
@@ -201,24 +250,21 @@ export const DictionaryView = () => {
         }
       });
 
-      setEnglishCategories(formattedPosList);
+      // Fallback if online POS fails
+      if (formattedPosList.length === 0) {
+        const offRes = searchOfflineLexicon(cleanWord);
+        setEnglishCategories(offRes.pos || []);
+      } else {
+        setEnglishCategories(formattedPosList);
+      }
 
-      // 4. Aggregate Synonyms from Dictionary API + Datamuse API
+      // 4. Aggregate Synonyms
       const collectedSynonyms = new Set();
-      
-      // From Dictionary API
       if (parsedDictData?.meanings) {
         parsedDictData.meanings.forEach(m => {
           if (m.synonyms) m.synonyms.forEach(s => collectedSynonyms.add(s));
-          if (m.definitions) {
-            m.definitions.forEach(d => {
-              if (d.synonyms) d.synonyms.forEach(s => collectedSynonyms.add(s));
-            });
-          }
         });
       }
-
-      // From Datamuse API
       if (synRes.status === 'fulfilled' && synRes.value.ok) {
         const synJson = await synRes.value.json();
         if (Array.isArray(synJson)) {
@@ -227,25 +273,15 @@ export const DictionaryView = () => {
           });
         }
       }
-
       setSynonymsList(Array.from(collectedSynonyms).slice(0, 12));
 
-      // 4. Aggregate Antonyms from Dictionary API + Datamuse API
+      // 5. Aggregate Antonyms
       const collectedAntonyms = new Set();
-      
-      // From Dictionary API
       if (parsedDictData?.meanings) {
         parsedDictData.meanings.forEach(m => {
           if (m.antonyms) m.antonyms.forEach(a => collectedAntonyms.add(a));
-          if (m.definitions) {
-            m.definitions.forEach(d => {
-              if (d.antonyms) d.antonyms.forEach(a => collectedAntonyms.add(a));
-            });
-          }
         });
       }
-
-      // From Datamuse API
       if (antRes.status === 'fulfilled' && antRes.value.ok) {
         const antJson = await antRes.value.json();
         if (Array.isArray(antJson)) {
@@ -254,11 +290,11 @@ export const DictionaryView = () => {
           });
         }
       }
-
       setAntonymsList(Array.from(collectedAntonyms).slice(0, 10));
 
     } catch (err) {
-      console.error('Fetch error:', err);
+      console.warn('Online dictionary fetch error, falling back to Offline Lexicon:', err);
+      applyOfflineLexiconResult(cleanWord);
     } finally {
       setLoading(false);
     }
@@ -379,14 +415,14 @@ export const DictionaryView = () => {
       {activeTab === 'search' ? (
         <>
           {/* SEARCH INPUT */}
-          <div className="bg-white dark:bg-[#0F172A] p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+          <div className="bg-white dark:bg-[#0F172A] p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm relative">
             <form onSubmit={handleSearchSubmit} className="relative flex items-center">
               <Search className="absolute left-3.5 sm:left-4 w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
               <input
                 type="text"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search any English word (e.g. Book, Perseverance)..."
+                onChange={handleSearchInputChange}
+                placeholder="Search any English word offline (e.g. Book, Perseverance)..."
                 className="w-full h-10 sm:h-12 pl-9 sm:pl-12 pr-20 sm:pr-28 rounded-xl sm:rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-blue-600 dark:focus:border-blue-500 shadow-inner"
               />
               <button
@@ -397,7 +433,35 @@ export const DictionaryView = () => {
                 {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <span>Search</span>}
               </button>
             </form>
+
+            {/* LIVE AUTOCOMPLETE DROPDOWN */}
+            {autocompleteSuggestions.length > 0 && (
+              <div className="absolute left-3 right-3 top-full mt-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl z-30 overflow-hidden">
+                {autocompleteSuggestions.map((sug, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setSearchTerm(sug);
+                      setAutocompleteSuggestions([]);
+                      fetchWordDetails(sug);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-800 flex items-center justify-between border-b last:border-0 border-slate-100 dark:border-slate-800 cursor-pointer"
+                  >
+                    <span className="capitalize">{sug}</span>
+                    <span className="text-[10px] text-slate-400">Offline Lexicon</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+
+          {/* OFFLINE STATUS BADGE INDICATOR */}
+          {isOfflineMode && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-700 dark:text-amber-400 text-xs font-bold w-fit">
+              <WifiOff className="w-4 h-4 text-amber-500" />
+              <span>100% Offline Mode (Loaded from Local Lexicon)</span>
+            </div>
+          )}
 
           {/* MAIN DICTIONARY RESULT DISPLAY */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
