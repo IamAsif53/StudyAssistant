@@ -1,0 +1,9 @@
+{
+  "appId": "com.smartstudy.planner",
+  "appName": "Smart Study Planner",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}
