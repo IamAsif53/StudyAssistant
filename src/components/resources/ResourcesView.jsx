@@ -2,8 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   FolderOpen, FileText, Download, ExternalLink, Trash2, Plus,
-  X, File, FileCode, Image, FileArchive, Search, Eye, Maximize2, Sparkles, Check
+  X, File, FileCode, Image, FileArchive, Search, Eye, Maximize2, Check, Sparkles
 } from 'lucide-react';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Browser } from '@capacitor/browser';
+
+// Helper to extract clean file extension (PDF, JPG, PNG, TXT, DOCX, etc.)
+const getFileExt = (fileName = '', fileType = '') => {
+  if (fileName && fileName.includes('.')) {
+    const ext = fileName.split('.').pop().trim().toUpperCase();
+    if (ext && ext.length <= 5) return ext;
+  }
+  if (fileType.includes('pdf')) return 'PDF';
+  if (fileType.includes('jpeg') || fileType.includes('jpg')) return 'JPG';
+  if (fileType.includes('png')) return 'PNG';
+  if (fileType.includes('gif')) return 'GIF';
+  if (fileType.includes('html')) return 'HTML';
+  if (fileType.includes('text') || fileType.includes('plain')) return 'TXT';
+  if (fileType.includes('word') || fileType.includes('document')) return 'DOCX';
+  if (fileType.includes('zip') || fileType.includes('rar')) return 'ZIP';
+  return 'FILE';
+};
 
 // Sample HTML / Document Data Generator
 const createSampleDocData = (title, content) => {
@@ -18,12 +37,12 @@ const createSampleDocData = (title, content) => {
         .card { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
         h1 { color: #2563eb; font-size: 22px; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; margin-top: 0; }
         .badge { background: #eff6ff; color: #2563eb; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; display: inline-block; margin-bottom: 12px; }
-        pre { background: #f1f5f9; padding: 16px; border-radius: 8px; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+        pre { background: #f1f5f9; padding: 16px; border-radius: 8px; font-size: 13px; white-space: pre-wrap; word-break: break-word; color: #0f172a; font-weight: 600; }
       </style>
     </head>
     <body>
       <div class="card">
-        <span class="badge">Study Material</span>
+        <span class="badge">Study Material Document</span>
         <h1>${title}</h1>
         <pre>${content}</pre>
         <p style="text-align:center; color:#94a3b8; font-size:12px; margin-top:30px;">Smart Study Planner - Academic Resource Document</p>
@@ -37,21 +56,28 @@ const createSampleDocData = (title, content) => {
 const INITIAL_RESOURCES = [
   {
     id: 'res-sample-1',
-    title: 'Right form of verb Board Analysis',
+    title: 'Right Form of Verbs Board Rules & Exercises',
     subjectName: 'English',
     fileName: 'RightFormOfVerbsFinalRules.PDF',
     fileSize: '199.5 KB',
     fileType: 'application/pdf',
     fileData: createSampleDocData(
-      'Right Form of Verbs Board Analysis',
-      `1. Subject-Verb Agreement Rules:
-- Singular subjects take singular verbs: He goes to school.
-- Plural subjects take plural verbs: They play football.
-- Words joined by 'and' take plural verbs: Rahim and Karim are study partners.
+      'Right Form of Verbs Board Rules & Exercises',
+      `RIGHT FORM OF VERBS - MASTER RULES:
 
-2. Important Past Rules:
-- If 'yesterday', 'ago', 'last night' are present, use Past Indefinite Tense.
-- If 'just', 'already', 'yet', 'recently' are present, use Present Perfect Tense.`
+1. SUBJECT-VERB AGREEMENT:
+- Singular Subject -> Singular Verb (e.g. "He reads every day.")
+- Plural Subject -> Plural Verb (e.g. "They study for exams.")
+- Words joined by 'and' take plural verbs: "Rahim and Karim are study partners."
+
+2. TENSE RULES:
+- If sentence contains 'yesterday', 'ago', 'last night', 'in 1971' -> Use Past Indefinite (e.g. "He went home yesterday.")
+- If sentence contains 'just', 'already', 'yet', 'recently' -> Use Present Perfect (e.g. "She has just finished her homework.")
+- If sentence contains 'now', 'at this moment' -> Use Present Continuous (e.g. "They are reading now.")
+
+3. PREPOSITION & MODAL RULES:
+- Prepositions (of, for, in, with, without) are followed by Verb+ing: "He is fond of reading books."
+- Modal Auxiliaries (can, could, may, might, shall, should, will, would, must) take base form of verb: "You must work hard."`
     ),
     uploadDate: '2026-08-13'
   },
@@ -83,7 +109,7 @@ INTEGRATION FORMULAS:
 export const ResourcesView = () => {
   const [resources, setResources] = useState(() => {
     try {
-      const saved = localStorage.getItem('ssp_real_resources_v2');
+      const saved = localStorage.getItem('ssp_real_resources_v3');
       return saved !== null ? JSON.parse(saved) : INITIAL_RESOURCES;
     } catch (e) {
       return INITIAL_RESOURCES;
@@ -91,7 +117,7 @@ export const ResourcesView = () => {
   });
 
   useEffect(() => {
-    localStorage.setItem('ssp_real_resources_v2', JSON.stringify(resources));
+    localStorage.setItem('ssp_real_resources_v3', JSON.stringify(resources));
   }, [resources]);
 
   const [search, setSearch] = useState('');
@@ -116,17 +142,17 @@ export const ResourcesView = () => {
 
   // Helper to choose file icon based on file type / extension
   const getFileIcon = (fileName = '', fileType = '') => {
-    const ext = fileName.split('.').pop()?.toLowerCase() || '';
-    if (fileType.includes('image') || ['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(ext)) {
+    const ext = getFileExt(fileName, fileType);
+    if (['JPG', 'PNG', 'JPEG', 'GIF', 'SVG', 'WEBP'].includes(ext)) {
       return <Image className="w-6 h-6 text-emerald-500" />;
     }
-    if (['js', 'jsx', 'ts', 'tsx', 'py', 'html', 'css', 'json', 'cpp', 'java'].includes(ext)) {
+    if (['JS', 'JSX', 'TS', 'TSX', 'PY', 'HTML', 'CSS', 'JSON', 'CPP', 'JAVA'].includes(ext)) {
       return <FileCode className="w-6 h-6 text-purple-500" />;
     }
-    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+    if (['ZIP', 'RAR', '7Z', 'TAR', 'GZ'].includes(ext)) {
       return <FileArchive className="w-6 h-6 text-amber-500" />;
     }
-    if (fileType.includes('pdf') || ext === 'pdf') {
+    if (ext === 'PDF') {
       return <FileText className="w-6 h-6 text-red-500" />;
     }
     return <File className="w-6 h-6 text-blue-600" />;
@@ -203,50 +229,72 @@ export const ResourcesView = () => {
     }
   };
 
-  // Cross-Platform Universal File Downloader for Android & Web
-  const handleDownloadFile = (resource) => {
+  // 100% Reliable Native Android & Web Universal File Downloader
+  const handleDownloadFile = async (resource) => {
     if (!resource?.fileData) return;
 
+    const ext = getFileExt(resource.fileName, resource.fileType);
+    const fileName = resource.fileName || `${resource.title}.${ext.toLowerCase()}`;
+
+    // 1. Try Native Android Capacitor Filesystem Write (saves directly to phone Documents)
+    try {
+      if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform()) {
+        let base64Content = resource.fileData;
+        if (base64Content.includes(',')) {
+          base64Content = base64Content.split(',')[1];
+        }
+
+        await Filesystem.writeFile({
+          path: fileName,
+          data: base64Content,
+          directory: Directory.Documents,
+          recursive: true
+        });
+
+        setDownloadSuccessMsg(`Saved ${fileName} to Documents!`);
+        setTimeout(() => setDownloadSuccessMsg(null), 4000);
+        return;
+      }
+    } catch (fsErr) {
+      console.warn('Capacitor Filesystem write error, fallback to Blob:', fsErr);
+    }
+
+    // 2. Cross-Platform Blob Link Download
     try {
       const blob = dataURItoBlob(resource.fileData);
-      const downloadName = resource.fileName || `${resource.title}.pdf`;
-
       if (blob) {
         const blobUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = blobUrl;
-        link.download = downloadName;
+        link.download = fileName;
         link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
 
-        setDownloadSuccessMsg(`Downloading ${downloadName}...`);
+        setDownloadSuccessMsg(`Downloading ${fileName}...`);
         setTimeout(() => setDownloadSuccessMsg(null), 3000);
 
         setTimeout(() => {
-          if (document.body.contains(link)) {
-            document.body.removeChild(link);
-          }
+          if (document.body.contains(link)) document.body.removeChild(link);
           URL.revokeObjectURL(blobUrl);
         }, 2000);
         return;
       }
-
-      // Fallback Direct Data URL Link
-      const link = document.createElement('a');
-      link.href = resource.fileData;
-      link.download = downloadName;
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      setDownloadSuccessMsg(`Downloading ${downloadName}...`);
-      setTimeout(() => setDownloadSuccessMsg(null), 3000);
     } catch (e) {
       console.error('Download error:', e);
-      window.open(resource.fileData, '_blank');
     }
+
+    // 3. Fallback Link
+    const link = document.createElement('a');
+    link.href = resource.fileData;
+    link.download = fileName;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setDownloadSuccessMsg(`Downloading ${fileName}...`);
+    setTimeout(() => setDownloadSuccessMsg(null), 3000);
   };
 
   // Open Document in In-App Preview Modal
@@ -255,9 +303,18 @@ export const ResourcesView = () => {
     setPreviewResource(resource);
   };
 
-  // Open Document in New Native Browser Window
-  const handleOpenInNewTab = (resource) => {
+  // Open Document in External System Browser / PDF Reader
+  const handleOpenInExternalBrowser = async (resource) => {
     if (!resource?.fileData) return;
+    try {
+      if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform()) {
+        await Browser.open({ url: resource.fileData });
+        return;
+      }
+    } catch (e) {
+      console.warn('Browser.open failed:', e);
+    }
+
     try {
       const blob = dataURItoBlob(resource.fileData);
       if (blob) {
@@ -265,10 +322,9 @@ export const ResourcesView = () => {
         window.open(blobUrl, '_blank');
         return;
       }
-      window.open(resource.fileData, '_blank');
-    } catch (e) {
-      window.open(resource.fileData, '_blank');
-    }
+    } catch (e) {}
+
+    window.open(resource.fileData, '_blank');
   };
 
   // Delete Resource Card
@@ -343,79 +399,83 @@ export const ResourcesView = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredResources.map((res) => (
-            <div
-              key={res.id}
-              className="bg-white dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-xs hover:border-blue-300 dark:hover:border-blue-500/50 transition-all group"
-            >
-              {/* Card Top Header */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
-                    {getFileIcon(res.fileName, res.fileType)}
+          {filteredResources.map((res) => {
+            const extName = getFileExt(res.fileName, res.fileType);
+
+            return (
+              <div
+                key={res.id}
+                className="bg-white dark:bg-[#0F172A] border border-[#E5E7EB] dark:border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-xs hover:border-blue-300 dark:hover:border-blue-500/50 transition-all group"
+              >
+                {/* Card Top Header */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                      {getFileIcon(res.fileName, res.fileType)}
+                    </div>
+
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-extrabold text-[10px] border border-blue-200 dark:border-blue-800/60">
+                      {res.subjectName}
+                    </span>
                   </div>
 
-                  <span className="px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-extrabold text-[10px] border border-blue-200 dark:border-blue-800/60">
-                    {res.subjectName}
-                  </span>
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-900 dark:text-white leading-snug line-clamp-2">
+                      {res.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+                      📄 {res.fileName}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium pt-1">
+                    <span>Size: <strong>{res.fileSize}</strong></span>
+                    <span>Uploaded: <strong>{res.uploadDate}</strong></span>
+                  </div>
                 </div>
 
-                <div>
-                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white leading-snug line-clamp-2">
-                    {res.title}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
-                    📄 {res.fileName}
-                  </p>
+                {/* Action Buttons: Open, Download EXT, Delete */}
+                <div className="flex items-center gap-2 pt-3 border-t border-[#E5E7EB] dark:border-slate-800">
+                  
+                  {/* OPEN / PREVIEW BUTTON */}
+                  <button
+                    onClick={() => handleOpenFile(res)}
+                    className="flex-1 h-9 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/40 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                    title="Open / View File"
+                  >
+                    <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span>Open</span>
+                  </button>
+
+                  {/* DOWNLOAD EXTENSION-SPECIFIC BUTTON */}
+                  <button
+                    onClick={() => handleDownloadFile(res)}
+                    className="h-9 px-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                    title={`Download ${extName} File`}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download {extName}</span>
+                  </button>
+
+                  {/* DELETE BUTTON */}
+                  <button
+                    onClick={() => handleDeleteResource(res.id)}
+                    className="h-9 px-3 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/60 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center"
+                    title="Delete Resource"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium pt-1">
-                  <span>Size: <strong>{res.fileSize}</strong></span>
-                  <span>Uploaded: <strong>{res.uploadDate}</strong></span>
-                </div>
               </div>
-
-              {/* Action Buttons: Open, Download, Delete */}
-              <div className="flex items-center gap-2 pt-3 border-t border-[#E5E7EB] dark:border-slate-800">
-                
-                {/* OPEN / PREVIEW BUTTON */}
-                <button
-                  onClick={() => handleOpenFile(res)}
-                  className="flex-1 h-9 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/40 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                  title="Open / View File"
-                >
-                  <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                  <span>Open</span>
-                </button>
-
-                {/* DOWNLOAD BUTTON */}
-                <button
-                  onClick={() => handleDownloadFile(res)}
-                  className="h-9 px-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                  title="Download File Instantly"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download</span>
-                </button>
-
-                {/* DELETE BUTTON */}
-                <button
-                  onClick={() => handleDeleteResource(res.id)}
-                  className="h-9 px-3 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/60 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center"
-                  title="Delete Resource"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       {/* FULLSCREEN IN-APP DOCUMENT PREVIEW MODAL */}
       {previewResource && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-slate-900/90 backdrop-blur-md p-2 sm:p-6 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex flex-col bg-slate-900/95 backdrop-blur-md p-2 sm:p-6 animate-in fade-in duration-200">
           <div className="w-full max-w-5xl mx-auto h-full flex flex-col bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
             
             {/* MODAL PREVIEW HEADER */}
@@ -440,11 +500,11 @@ export const ResourcesView = () => {
                   className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <Download className="w-4 h-4" />
-                  <span className="hidden sm:inline">Download</span>
+                  <span>Download {getFileExt(previewResource.fileName, previewResource.fileType)}</span>
                 </button>
 
                 <button
-                  onClick={() => handleOpenInNewTab(previewResource)}
+                  onClick={() => handleOpenInExternalBrowser(previewResource)}
                   className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 cursor-pointer"
                   title="Open in Browser Tab"
                 >
@@ -460,65 +520,72 @@ export const ResourcesView = () => {
               </div>
             </div>
 
-            {/* MODAL PREVIEW BODY - UNIVERSAL DOCUMENT & PDF VIEWER */}
-            <div className="flex-1 w-full bg-slate-950 p-3 sm:p-6 overflow-y-auto flex flex-col items-center justify-center relative">
+            {/* MODAL PREVIEW BODY - UNIVERSAL EXTENSION READER */}
+            <div className="flex-1 w-full bg-slate-950 p-3 sm:p-6 overflow-y-auto flex flex-col items-center justify-start space-y-4">
               
-              {/* PDF Document Interactive Card */}
-              <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-5 my-auto">
-                <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center mx-auto shadow-lg">
-                  <FileText className="w-8 h-8" />
+              {/* IMAGE FILE RENDERING */}
+              {['JPG', 'PNG', 'JPEG', 'GIF', 'SVG', 'WEBP'].includes(getFileExt(previewResource.fileName, previewResource.fileType)) ? (
+                <div className="w-full h-full flex items-center justify-center my-auto">
+                  <img
+                    src={previewResource.fileData}
+                    alt={previewResource.title}
+                    className="max-w-full max-h-[70vh] object-contain rounded-2xl shadow-2xl border border-slate-800"
+                  />
                 </div>
+              ) : (
+                /* DOCUMENT & PDF RENDERING */
+                <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 my-auto">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        {getFileIcon(previewResource.fileName, previewResource.fileType)}
+                      </div>
+                      <div>
+                        <h4 className="text-base sm:text-lg font-black text-white">
+                          {previewResource.title}
+                        </h4>
+                        <p className="text-xs text-slate-400">
+                          📄 {previewResource.fileName} • {previewResource.fileSize}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
-                <div className="space-y-1">
-                  <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-bold border border-blue-500/20 inline-block">
-                    {previewResource.subjectName}
-                  </span>
-                  <h4 className="text-lg sm:text-xl font-black text-white pt-2">
-                    {previewResource.title}
-                  </h4>
-                  <p className="text-xs text-slate-400">
-                    📄 {previewResource.fileName} • {previewResource.fileSize}
-                  </p>
+                  {/* DOCUMENT IN-APP CONTENT DISPLAY CONTAINER */}
+                  <div className="bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-800 max-h-[50vh] overflow-y-auto space-y-3">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 border-b border-slate-800/80 pb-2">
+                      <span>DOCUMENT READER CONTENT</span>
+                      <span className="text-blue-400">{getFileExt(previewResource.fileName, previewResource.fileType)} Document</span>
+                    </div>
+
+                    {/* Embedded Frame / Readable Content */}
+                    <iframe
+                      src={previewResource.fileData}
+                      title={previewResource.title}
+                      className="w-full min-h-[300px] border-none rounded-xl bg-white text-slate-900"
+                    />
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                    <button
+                      onClick={() => handleDownloadFile(previewResource)}
+                      className="w-full py-3 px-5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Download {getFileExt(previewResource.fileName, previewResource.fileType)} File</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenInExternalBrowser(previewResource)}
+                      className="w-full py-3 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 border border-slate-700 cursor-pointer transition-all"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>Open in Browser</span>
+                    </button>
+                  </div>
                 </div>
-
-                <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60 text-left space-y-2">
-                  <p className="text-xs font-bold text-slate-300">
-                    📱 Document Reading Options:
-                  </p>
-                  <ul className="text-[11px] text-slate-400 space-y-1 list-disc pl-4">
-                    <li>Tap <strong>"Download PDF File"</strong> to save directly into your phone's Download folder.</li>
-                    <li>Tap <strong>"Open PDF in External Viewer"</strong> to launch with Google PDF Viewer or Drive.</li>
-                  </ul>
-                </div>
-
-                {/* Primary Mobile Action Buttons */}
-                <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
-                  <button
-                    onClick={() => handleDownloadFile(previewResource)}
-                    className="w-full py-3 px-5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Download PDF File</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleOpenInNewTab(previewResource)}
-                    className="w-full py-3 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 border border-slate-700 cursor-pointer transition-all"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    <span>Open in External Viewer</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* In-Line iframe viewer for desktop & supported webviews */}
-              <div className="w-full h-full min-h-[300px] mt-4 hidden md:block border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-                <iframe
-                  src={previewResource.fileData}
-                  title={previewResource.title}
-                  className="w-full h-full border-none bg-white"
-                />
-              </div>
+              )}
 
             </div>
 
@@ -583,7 +650,7 @@ export const ResourcesView = () => {
                 />
                 {selectedFile && (
                   <p className="text-[11px] text-blue-600 font-bold mt-1.5">
-                    Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
+                    Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)}) [Type: {getFileExt(selectedFile.name, selectedFile.type)}]
                   </p>
                 )}
               </div>
