@@ -142,22 +142,11 @@ export const PlannerView = () => {
 
   const [showDiagnosticModal, setShowDiagnosticModal] = useState(false);
   const [diagnosticData, setDiagnosticData] = useState(null);
-  const [testMsg, setTestMsg] = useState(null);
 
   const handleOpenDiagnostics = async () => {
     const status = await deviceNotificationService.checkDiagnosticStatus();
     setDiagnosticData(status);
     setShowDiagnosticModal(true);
-  };
-
-  const handleRunTestAlarm = async () => {
-    try {
-      await deviceNotificationService.scheduleTestNotification(10);
-      setTestMsg('🚀 Test alarm scheduled for 10 seconds! Lock your phone or swipe away app now to test status bar notification.');
-      setTimeout(() => setTestMsg(null), 7000);
-    } catch (e) {
-      alert('Test alarm error: ' + (e?.message || e));
-    }
   };
 
   useEffect(() => {
@@ -167,10 +156,16 @@ export const PlannerView = () => {
   useEffect(() => {
     localStorage.setItem('ssp_weekly_routine_v3', JSON.stringify(weeklyRoutine));
     const timer = setTimeout(() => {
-      deviceNotificationService.syncAllAlarms({
-        weeklyRoutine,
-        notificationsEnabled
-      });
+      try {
+        const exams = JSON.parse(localStorage.getItem('ssp_exams') || '[]');
+        const homework = JSON.parse(localStorage.getItem('ssp_homework') || '[]');
+        deviceNotificationService.syncAllAlarms({
+          weeklyRoutine,
+          exams,
+          homework,
+          notificationsEnabled
+        });
+      } catch (e) {}
     }, 500);
     return () => clearTimeout(timer);
   }, [weeklyRoutine, notificationsEnabled]);
@@ -779,16 +774,8 @@ export const PlannerView = () => {
             {/* Actions */}
             <div className="space-y-2 pt-1">
               <button
-                onClick={handleRunTestAlarm}
-                className="w-full py-3 px-4 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Test Notification (Fire in 10s)</span>
-              </button>
-
-              <button
                 onClick={() => deviceNotificationService.openNotificationSettings()}
-                className="w-full py-2.5 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all border border-slate-200 dark:border-slate-700"
+                className="w-full py-3 px-4 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
               >
                 <Bell className="w-4 h-4" />
                 <span>Open Android Notification Settings</span>

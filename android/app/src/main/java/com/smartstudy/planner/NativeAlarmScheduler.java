@@ -1,6 +1,7 @@
 package com.smartstudy.planner;
 
 import android.app.AlarmManager;
+import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -36,7 +37,7 @@ public class NativeAlarmScheduler {
             studyChannel.enableVibration(true);
             studyChannel.enableLights(true);
             studyChannel.setShowBadge(true);
-            studyChannel.setLockscreenVisibility(NotificationChannel.LOCKSCREEN_VISIBILITY_PUBLIC);
+            studyChannel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             manager.createNotificationChannel(studyChannel);
 
             // 2. Exam Reminders Channel
@@ -49,7 +50,7 @@ public class NativeAlarmScheduler {
             examChannel.enableVibration(true);
             examChannel.enableLights(true);
             examChannel.setShowBadge(true);
-            examChannel.setLockscreenVisibility(NotificationChannel.LOCKSCREEN_VISIBILITY_PUBLIC);
+            examChannel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             manager.createNotificationChannel(examChannel);
 
             // 3. Homework Reminders Channel
@@ -62,7 +63,7 @@ public class NativeAlarmScheduler {
             hwChannel.enableVibration(true);
             hwChannel.enableLights(true);
             hwChannel.setShowBadge(true);
-            hwChannel.setLockscreenVisibility(NotificationChannel.LOCKSCREEN_VISIBILITY_PUBLIC);
+            hwChannel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             manager.createNotificationChannel(hwChannel);
         }
     }

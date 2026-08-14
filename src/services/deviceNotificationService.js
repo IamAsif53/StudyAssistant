@@ -13,24 +13,42 @@ const DAYS_MAP = {
   'Saturday': 6
 };
 
-// Helper: Calculate target Date for next upcoming day of week & time (HH:mm)
-const getNextDateForDayAndTime = (dayName, time24) => {
+// Robust Helper: Parse 12-hour or 24-hour time strings (e.g. "11:07 AM", "11:07", "11:07 AM - 11:55 AM")
+const parseTimeHHMM = (timeStr) => {
+  if (!timeStr || typeof timeStr !== 'string') return { hours: 9, minutes: 0 };
+  const cleanStr = timeStr.split('-')[0].trim();
+
+  const match = cleanStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (match) {
+    let h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const period = match[3] ? match[3].toUpperCase() : null;
+
+    if (period === 'PM' && h < 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+
+    return { hours: h, minutes: m };
+  }
+
+  return { hours: 9, minutes: 0 };
+};
+
+// Helper: Calculate target Date for next upcoming day of week & time
+const getNextDateForDayAndTime = (dayName, timeStr) => {
   if (!dayName || !DAYS_MAP.hasOwnProperty(dayName)) return null;
   const targetDayIdx = DAYS_MAP[dayName];
 
   try {
     const now = new Date();
     const currentDayIdx = now.getDay();
-    const [hours, minutes] = (time24 || '09:00').split(':').map(Number);
-
-    if (isNaN(hours) || isNaN(minutes)) return null;
+    const { hours, minutes } = parseTimeHHMM(timeStr);
 
     let daysAhead = targetDayIdx - currentDayIdx;
     if (daysAhead < 0) {
       daysAhead += 7;
     } else if (daysAhead === 0) {
       const targetToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
-      if (targetToday.getTime() <= now.getTime() + 60000) {
+      if (targetToday.getTime() <= now.getTime()) {
         daysAhead = 7;
       }
     }
@@ -53,16 +71,9 @@ const parseExamDateTime = (dateStr, timeStr) => {
     let minutes = 0;
 
     if (timeStr && typeof timeStr === 'string') {
-      const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-      if (match) {
-        let h = parseInt(match[1], 10);
-        const m = parseInt(match[2], 10);
-        const period = match[3].toUpperCase();
-        if (period === 'PM' && h < 12) h += 12;
-        if (period === 'AM' && h === 12) h = 0;
-        hours = h;
-        minutes = m;
-      }
+      const { hours: h, minutes: m } = parseTimeHHMM(timeStr);
+      hours = h;
+      minutes = m;
     }
 
     return new Date(year, month - 1, day, hours, minutes, 0);
@@ -114,41 +125,6 @@ class DeviceNotificationService {
       }
     } catch (err) {
       console.warn('DeviceNotificationService init warning:', err);
-    }
-  }
-
-  // 10-Second Test Notification Scheduler
-  async scheduleTestNotification(seconds = 10) {
-    await this.init();
-    const triggerAt = Date.now() + seconds * 1000;
-    const testId = generateAlarmId(`test_notif_${Date.now()}`);
-
-    if (this.isNative) {
-      try {
-        await NativeAlarm.scheduleAlarm({
-          id: testId,
-          type: 'study',
-          title: '📚 Study Planner Test Alarm',
-          body: `Test notification triggered! (App closed/Screen locked test - ${seconds}s)`,
-          triggerAtMillis: triggerAt,
-          channelId: 'study_reminders',
-          route: 'planner'
-        });
-        return { success: true, triggerAt, testId };
-      } catch (err) {
-        console.error('[TEST ALARM ERROR]:', err);
-        throw err;
-      }
-    } else {
-      setTimeout(() => {
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('📚 Study Planner Test Alarm', {
-            body: `Test notification triggered! (${seconds}s)`,
-            icon: '/favicon.ico'
-          });
-        }
-      }, seconds * 1000);
-      return { success: true, triggerAt, testId };
     }
   }
 
@@ -229,7 +205,7 @@ class DeviceNotificationService {
               await NativeAlarm.scheduleAlarm({
                 id: routineId,
                 type: 'study',
-                title: `📚 Study Time`,
+                title: `📚 Study Time (${dayName})`,
                 body: `${slot.subjects} — session starts now (${slot.startTime}). ${slot.notes ? '(' + slot.notes + ')' : ''}`,
                 triggerAtMillis: targetDate.getTime(),
                 channelId: 'study_reminders',
@@ -257,12 +233,13 @@ class DeviceNotificationService {
         }
       }
 
-      // 3. Schedule Exam Alarms
+      // 3. Schedule Exam Alarms (Exam Day + 1 Day Before + 30 Mins Before)
       if (Array.isArray(exams)) {
         for (const exam of exams) {
           if (!exam || !exam.date) continue;
           const examDate = parseExamDateTime(exam.date, exam.time);
           if (examDate && examDate.getTime() > Date.now()) {
+            // 1. Exact Exam Time Alarm
             const examId = generateAlarmId(`exam_${exam.id}`);
             await NativeAlarm.scheduleAlarm({
               id: examId,
@@ -275,6 +252,23 @@ class DeviceNotificationService {
             });
             count++;
 
+            // 2. 1-DAY BEFORE EXAM ALARM
+            const date1DayBeforeExam = new Date(examDate.getTime() - 24 * 60 * 60 * 1000);
+            if (date1DayBeforeExam.getTime() > Date.now()) {
+              const exam1DayId = generateAlarmId(`exam1d_${exam.id}`);
+              await NativeAlarm.scheduleAlarm({
+                id: exam1DayId,
+                type: 'exam_reminder',
+                title: `⚠️ Exam Tomorrow: ${exam.title}`,
+                body: `Get ready! Your ${exam.title} exam is scheduled for tomorrow at ${exam.time || '09:00 AM'}.`,
+                triggerAtMillis: date1DayBeforeExam.getTime(),
+                channelId: 'exam_reminders',
+                route: 'exams'
+              });
+              count++;
+            }
+
+            // 3. 30-Min Before Exam Alarm
             const date30MinBefore = new Date(examDate.getTime() - 30 * 60 * 1000);
             if (date30MinBefore.getTime() > Date.now()) {
               const examRemId = generateAlarmId(`exam30m_${exam.id}`);
@@ -282,7 +276,7 @@ class DeviceNotificationService {
                 id: examRemId,
                 type: 'exam_reminder',
                 title: `⚠️ Exam Reminder: ${exam.title} in 30 mins`,
-                body: `Your ${exam.title} starts in 30 minutes (${exam.time}). Double check your supplies!`,
+                body: `Your ${exam.title} starts in 30 minutes (${exam.time || '09:00 AM'}). Double check your supplies!`,
                 triggerAtMillis: date30MinBefore.getTime(),
                 channelId: 'exam_reminders',
                 route: 'exams'
@@ -293,12 +287,13 @@ class DeviceNotificationService {
         }
       }
 
-      // 4. Schedule Homework Due Date Alarms
+      // 4. Schedule Homework Due Date Alarms (Due Date + 1 Day Before)
       if (Array.isArray(homework)) {
         for (const hw of homework) {
           if (!hw || hw.status === 'Completed' || !hw.dueDate) continue;
           const hwDate = parseExamDateTime(hw.dueDate, '09:00 AM');
           if (hwDate && hwDate.getTime() > Date.now()) {
+            // 1. Exact Due Date Alarm (9:00 AM on Due Date)
             const hwId = generateAlarmId(`hw_${hw.id}`);
             await NativeAlarm.scheduleAlarm({
               id: hwId,
@@ -310,6 +305,22 @@ class DeviceNotificationService {
               route: 'homework'
             });
             count++;
+
+            // 2. 1-DAY BEFORE HOMEWORK ALARM (9:00 AM on Day Before Due Date)
+            const date1DayBeforeHw = new Date(hwDate.getTime() - 24 * 60 * 60 * 1000);
+            if (date1DayBeforeHw.getTime() > Date.now()) {
+              const hw1DayId = generateAlarmId(`hw1d_${hw.id}`);
+              await NativeAlarm.scheduleAlarm({
+                id: hw1DayId,
+                type: 'homework_reminder',
+                title: `📌 Homework Due Tomorrow: ${hw.title}`,
+                body: `Reminder: Complete your ${hw.title} (${hw.subject || 'Assignment'}) before tomorrow!`,
+                triggerAtMillis: date1DayBeforeHw.getTime(),
+                channelId: 'homework_reminders',
+                route: 'homework'
+              });
+              count++;
+            }
           }
         }
       }
