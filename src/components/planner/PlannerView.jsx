@@ -701,13 +701,7 @@ export const PlannerView = () => {
         </div>
       )}
 
-      {/* Toast Notification Banner for Test Alarms */}
-      {testMsg && (
-        <div className="fixed top-4 right-4 z-50 bg-purple-600 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 text-xs font-bold animate-in slide-in-from-top-5 max-w-md">
-          <Sparkles className="w-5 h-5 shrink-0" />
-          <span>{testMsg}</span>
-        </div>
-      )}
+
 
       {/* NATIVE NOTIFICATION DIAGNOSTIC CONTROL MODAL */}
       {showDiagnosticModal && diagnosticData && (
