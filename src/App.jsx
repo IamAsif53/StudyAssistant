@@ -11,6 +11,7 @@ import { ResourcesView } from './components/resources/ResourcesView';
 import { SyllabusView } from './components/syllabus/SyllabusView';
 import { DictionaryView } from './components/dictionary/DictionaryView';
 import { RelaxationView } from './components/relaxation/RelaxationView';
+import { TimerView } from './components/timer/TimerView';
 import { QuickAddModal } from './components/layout/QuickAddModal';
 
 const AppContent = () => {
@@ -20,6 +21,7 @@ const AppContent = () => {
   const renderActiveView = () => {
     switch (activeTab) {
       case 'planner': return <PlannerView />;
+      case 'timer': return <TimerView />;
       case 'syllabus': return <SyllabusView />;
       case 'dictionary': return <DictionaryView />;
       case 'homework': return <HomeworkView />;

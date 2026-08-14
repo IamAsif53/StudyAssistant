@@ -2,7 +2,7 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   Calendar as CalendarIcon, CheckSquare, GraduationCap,
-  FileText, Folder, BookCheck, BookOpen, X, Gamepad2
+  FileText, Folder, BookCheck, BookOpen, X, Gamepad2, Timer as TimerIcon
 } from 'lucide-react';
 
 export const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
@@ -10,6 +10,7 @@ export const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
 
   const navItems = [
     { id: 'planner', label: 'Routine', icon: CalendarIcon },
+    { id: 'timer', label: 'Study Timer', icon: TimerIcon },
     { id: 'syllabus', label: 'Syllabus Tracker', icon: BookCheck },
     { id: 'homework', label: 'Homework', icon: CheckSquare },
     { id: 'exams', label: 'Exams', icon: GraduationCap },

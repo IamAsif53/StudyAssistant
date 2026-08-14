@@ -166,6 +166,50 @@ class DeviceNotificationService {
     }
   }
 
+  // Schedule Single Timer Alarm
+  async scheduleTimerAlarm({ id, title, body, triggerAtMillis }) {
+    await this.init();
+    if (this.isNative) {
+      try {
+        await NativeAlarm.scheduleAlarm({
+          id: id,
+          type: 'timer',
+          title: title || '⏱️ Study Timer Complete!',
+          body: body || 'Time is up for your study session!',
+          triggerAtMillis: triggerAtMillis,
+          channelId: 'study_reminders',
+          route: 'timer'
+        });
+        return true;
+      } catch (e) {
+        console.error('scheduleTimerAlarm error:', e);
+        return false;
+      }
+    } else {
+      const delay = triggerAtMillis - Date.now();
+      if (delay > 0) {
+        setTimeout(() => {
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(title || '⏱️ Study Timer Complete!', {
+              body: body || 'Time is up for your study session!',
+              icon: '/favicon.ico'
+            });
+          }
+        }, delay);
+      }
+      return true;
+    }
+  }
+
+  // Cancel Single Timer Alarm
+  async cancelTimerAlarm(id) {
+    if (this.isNative) {
+      try {
+        await NativeAlarm.cancelAlarm({ id });
+      } catch (e) {}
+    }
+  }
+
   // CENTRALIZED ALARM SYNCHRONIZER FOR ROUTINES, EXAMS & HOMEWORK
   async syncAllAlarms({ weeklyRoutine, exams = [], homework = [], notificationsEnabled = true }) {
     try {
