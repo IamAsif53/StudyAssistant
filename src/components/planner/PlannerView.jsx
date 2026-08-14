@@ -140,6 +140,26 @@ export const PlannerView = () => {
     }
   });
 
+  const [showDiagnosticModal, setShowDiagnosticModal] = useState(false);
+  const [diagnosticData, setDiagnosticData] = useState(null);
+  const [testMsg, setTestMsg] = useState(null);
+
+  const handleOpenDiagnostics = async () => {
+    const status = await deviceNotificationService.checkDiagnosticStatus();
+    setDiagnosticData(status);
+    setShowDiagnosticModal(true);
+  };
+
+  const handleRunTestAlarm = async () => {
+    try {
+      await deviceNotificationService.scheduleTestNotification(10);
+      setTestMsg('🚀 Test alarm scheduled for 10 seconds! Lock your phone or swipe away app now to test status bar notification.');
+      setTimeout(() => setTestMsg(null), 7000);
+    } catch (e) {
+      alert('Test alarm error: ' + (e?.message || e));
+    }
+  };
+
   useEffect(() => {
     localStorage.setItem('ssp_routine_notifications_enabled', JSON.stringify(notificationsEnabled));
   }, [notificationsEnabled]);
@@ -401,6 +421,16 @@ export const PlannerView = () => {
 
         {/* HEADER ACTION BUTTONS */}
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {/* NATIVE ALARM DIAGNOSTIC CONTROL BUTTON */}
+          <button
+            onClick={handleOpenDiagnostics}
+            className="flex items-center gap-1.5 py-2.5 px-3.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800/60 font-bold text-xs transition-all cursor-pointer shadow-2xs"
+            title="Check Native Notification Status & Test Alarm"
+          >
+            <BellRing className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <span>Alarm Diagnostics & Test</span>
+          </button>
+
           {/* INSTANT NOTIFICATION TOGGLE BUTTON */}
           <button
             onClick={handleToggleNotifications}
@@ -672,6 +702,108 @@ export const PlannerView = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification Banner for Test Alarms */}
+      {testMsg && (
+        <div className="fixed top-4 right-4 z-50 bg-purple-600 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 text-xs font-bold animate-in slide-in-from-top-5 max-w-md">
+          <Sparkles className="w-5 h-5 shrink-0" />
+          <span>{testMsg}</span>
+        </div>
+      )}
+
+      {/* NATIVE NOTIFICATION DIAGNOSTIC CONTROL MODAL */}
+      {showDiagnosticModal && diagnosticData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs">
+          <div className="w-[92vw] max-w-md p-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-5 shadow-2xl relative animate-in zoom-in-95">
+            <button
+              onClick={() => setShowDiagnosticModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer p-1"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800">
+                <BellRing className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                  Native Notification System
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Android OS AlarmManager & Status Bar Diagnostics
+                </p>
+              </div>
+            </div>
+
+            {/* Diagnostic Items Checklist */}
+            <div className="space-y-2.5 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/60 text-xs font-bold">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-300">Device Notification Permission</span>
+                <span className={diagnosticData.notificationsPermission ? 'text-emerald-500' : 'text-red-500'}>
+                  {diagnosticData.notificationsPermission ? '✓ Enabled' : '✕ Disabled'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-300">Exact Alarm Timing (Android 12+)</span>
+                <span className={diagnosticData.exactAlarmPermission ? 'text-emerald-500' : 'text-amber-500'}>
+                  {diagnosticData.exactAlarmPermission ? '✓ Enabled' : '⚠️ Restricted'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-300">Study Routine Channel</span>
+                <span className="text-emerald-500">✓ High Importance</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-300">Exam Reminders Channel</span>
+                <span className="text-emerald-500">✓ High Importance</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-slate-300">Homework Reminders Channel</span>
+                <span className="text-emerald-500">✓ High Importance</span>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
+                <span className="text-slate-700 dark:text-slate-200">Active Scheduled System Alarms</span>
+                <span className="text-blue-600 dark:text-blue-400 font-extrabold">{diagnosticData.scheduledCount} Alarms</span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={handleRunTestAlarm}
+                className="w-full py-3 px-4 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Test Notification (Fire in 10s)</span>
+              </button>
+
+              <button
+                onClick={() => deviceNotificationService.openNotificationSettings()}
+                className="w-full py-2.5 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all border border-slate-200 dark:border-slate-700"
+              >
+                <Bell className="w-4 h-4" />
+                <span>Open Android Notification Settings</span>
+              </button>
+
+              {!diagnosticData.exactAlarmPermission && (
+                <button
+                  onClick={() => deviceNotificationService.openExactAlarmSettings()}
+                  className="w-full py-2.5 px-4 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all"
+                >
+                  <span>Fix Exact Alarm Permission</span>
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
       )}

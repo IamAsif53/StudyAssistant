@@ -1,4 +1,7 @@
+import { registerPlugin } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
+
+const NativeAlarm = registerPlugin('NativeAlarm');
 
 const DAYS_MAP = {
   'Sunday': 0,
@@ -101,23 +104,6 @@ class DeviceNotificationService {
         } else {
           this.hasPermission = true;
         }
-
-        if (this.hasPermission) {
-          await LocalNotifications.createChannel({
-            id: 'study_planner_alarms',
-            name: 'Study Routine & Exam Alarms',
-            description: 'Real-time background status bar alarms for routines, exams, and homework',
-            importance: 5,
-            sound: 'res://platform_default',
-            vibration: true,
-            visibility: 1
-          });
-
-          LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
-            console.log('[NOTIFICATION] Tapped by user:', action);
-            if (window.focus) window.focus();
-          });
-        }
       } else if (typeof window !== 'undefined' && 'Notification' in window) {
         if (Notification.permission === 'granted') {
           this.hasPermission = true;
@@ -131,43 +117,77 @@ class DeviceNotificationService {
     }
   }
 
-  // Send an immediate notification (when inside app or testing)
-  async sendDeviceNotification({ title, body, id, extra = {} }) {
-    try {
-      await this.init();
-      const notifId = id || Math.floor(Math.random() * 1000000);
+  // 10-Second Test Notification Scheduler
+  async scheduleTestNotification(seconds = 10) {
+    await this.init();
+    const triggerAt = Date.now() + seconds * 1000;
+    const testId = generateAlarmId(`test_notif_${Date.now()}`);
 
-      if (this.isNative && this.hasPermission) {
-        await LocalNotifications.schedule({
-          notifications: [
-            {
-              title: title,
-              body: body,
-              id: notifId,
-              schedule: { at: new Date(Date.now() + 100), allowWhileIdle: true },
-              sound: 'res://platform_default',
-              channelId: 'study_planner_alarms',
-              actionTypeId: '',
-              extra: extra
-            }
-          ]
+    if (this.isNative) {
+      try {
+        await NativeAlarm.scheduleAlarm({
+          id: testId,
+          type: 'study',
+          title: '📚 Study Planner Test Alarm',
+          body: `Test notification triggered! (App closed/Screen locked test - ${seconds}s)`,
+          triggerAtMillis: triggerAt,
+          channelId: 'study_reminders',
+          route: 'planner'
         });
-        return true;
+        return { success: true, triggerAt, testId };
+      } catch (err) {
+        console.error('[TEST ALARM ERROR]:', err);
+        throw err;
       }
-
-      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, {
-          body: body,
-          icon: '/favicon.ico',
-          tag: `ssp_notif_${notifId}`
-        });
-        return true;
-      }
-    } catch (e) {
-      console.warn('sendDeviceNotification error:', e);
+    } else {
+      setTimeout(() => {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('📚 Study Planner Test Alarm', {
+            body: `Test notification triggered! (${seconds}s)`,
+            icon: '/favicon.ico'
+          });
+        }
+      }, seconds * 1000);
+      return { success: true, triggerAt, testId };
     }
+  }
 
-    return false;
+  // Diagnostic Check Method
+  async checkDiagnosticStatus() {
+    await this.init();
+    if (this.isNative) {
+      try {
+        const res = await NativeAlarm.checkDiagnosticStatus();
+        return res;
+      } catch (e) {
+        console.warn('checkDiagnosticStatus error:', e);
+      }
+    }
+    return {
+      notificationsPermission: this.hasPermission,
+      exactAlarmPermission: true,
+      studyChannel: true,
+      examChannel: true,
+      homeworkChannel: true,
+      scheduledCount: 0
+    };
+  }
+
+  // Open System Settings Handlers
+  async openNotificationSettings() {
+    if (this.isNative) {
+      try {
+        await NativeAlarm.openNotificationSettings();
+      } catch (e) {}
+    }
+  }
+
+  async openExactAlarmSettings() {
+    if (this.isNative) {
+      try {
+        await NativeAlarm.openExactAlarmSettings();
+      } catch (e) {}
+    }
   }
 
   // CENTRALIZED ALARM SYNCHRONIZER FOR ROUTINES, EXAMS & HOMEWORK
@@ -175,20 +195,15 @@ class DeviceNotificationService {
     try {
       await this.init();
 
-      if (!this.isNative || !this.hasPermission) {
+      if (!this.isNative) {
         return;
       }
 
-      // 1. Cancel all existing pending alarms
+      // 1. Clear previous native alarms
       try {
-        const pending = await LocalNotifications.getPending();
-        if (pending && Array.isArray(pending.notifications) && pending.notifications.length > 0) {
-          await LocalNotifications.cancel({
-            notifications: pending.notifications.map(n => ({ id: n.id }))
-          });
-        }
+        await NativeAlarm.cancelAllAlarms();
       } catch (e) {
-        console.warn('Cancel pending notifications warning:', e);
+        console.warn('cancelAllAlarms warning:', e);
       }
 
       if (!notificationsEnabled) {
@@ -196,111 +211,112 @@ class DeviceNotificationService {
         return;
       }
 
-      const notificationsToSchedule = [];
+      let count = 0;
 
       // 2. Schedule Weekly Routine Alarms (For all 7 Days)
-      // SAFE CHECK: Ensure weeklyRoutine is non-null object and not array!
       if (weeklyRoutine && typeof weeklyRoutine === 'object' && !Array.isArray(weeklyRoutine) && weeklyRoutine !== null) {
-        Object.keys(weeklyRoutine).forEach((dayName) => {
+        for (const dayName of Object.keys(weeklyRoutine)) {
           const slots = weeklyRoutine[dayName];
-          if (!Array.isArray(slots)) return;
+          if (!Array.isArray(slots)) continue;
 
-          slots.forEach((slot) => {
-            if (!slot || !slot.startTime || !slot.subjects) return;
+          for (const slot of slots) {
+            if (!slot || !slot.startTime || !slot.subjects) continue;
 
             const targetDate = getNextDateForDayAndTime(dayName, slot.startTime);
             if (targetDate && targetDate.getTime() > Date.now()) {
-              // Exact Start Alarm
-              notificationsToSchedule.push({
-                id: generateAlarmId(`routine_${dayName}_${slot.id}_${slot.startTime}`),
-                title: `⏰ ${dayName} Routine: ${slot.subjects}`,
-                body: `It is ${slot.startTime}. Time to start studying ${slot.subjects}! ${slot.notes ? '(' + slot.notes + ')' : ''}`,
-                schedule: { at: targetDate, allowWhileIdle: true },
-                sound: 'res://platform_default',
-                channelId: 'study_planner_alarms',
-                extra: { type: 'routine', day: dayName, slotId: slot.id }
+              // Exact Routine Start Alarm
+              const routineId = generateAlarmId(`routine_${dayName}_${slot.id}_${slot.startTime}`);
+              await NativeAlarm.scheduleAlarm({
+                id: routineId,
+                type: 'study',
+                title: `📚 Study Time`,
+                body: `${slot.subjects} — session starts now (${slot.startTime}). ${slot.notes ? '(' + slot.notes + ')' : ''}`,
+                triggerAtMillis: targetDate.getTime(),
+                channelId: 'study_reminders',
+                route: 'planner'
               });
+              count++;
 
               // 5-minute Reminder Alarm
               const date5MinBefore = new Date(targetDate.getTime() - 5 * 60 * 1000);
               if (date5MinBefore.getTime() > Date.now()) {
-                notificationsToSchedule.push({
-                  id: generateAlarmId(`routine5m_${dayName}_${slot.id}_${slot.startTime}`),
-                  title: `🔔 Upcoming Routine: ${slot.subjects}`,
-                  body: `Get ready! Your ${slot.subjects} study session starts in 5 minutes.`,
-                  schedule: { at: date5MinBefore, allowWhileIdle: true },
-                  sound: 'res://platform_default',
-                  channelId: 'study_planner_alarms',
-                  extra: { type: 'routine_reminder', day: dayName, slotId: slot.id }
+                const reminderId = generateAlarmId(`routine5m_${dayName}_${slot.id}_${slot.startTime}`);
+                await NativeAlarm.scheduleAlarm({
+                  id: reminderId,
+                  type: 'study_reminder',
+                  title: `⏰ Upcoming Study Routine: ${slot.subjects}`,
+                  body: `Get ready! ${slot.subjects} study session starts in 5 minutes (${slot.startTime}).`,
+                  triggerAtMillis: date5MinBefore.getTime(),
+                  channelId: 'study_reminders',
+                  route: 'planner'
                 });
+                count++;
               }
             }
-          });
-        });
+          }
+        }
       }
 
       // 3. Schedule Exam Alarms
       if (Array.isArray(exams)) {
-        exams.forEach((exam) => {
-          if (!exam || !exam.date) return;
+        for (const exam of exams) {
+          if (!exam || !exam.date) continue;
           const examDate = parseExamDateTime(exam.date, exam.time);
           if (examDate && examDate.getTime() > Date.now()) {
-            notificationsToSchedule.push({
-              id: generateAlarmId(`exam_${exam.id}`),
-              title: `🎯 Exam Starting Now: ${exam.title}`,
+            const examId = generateAlarmId(`exam_${exam.id}`);
+            await NativeAlarm.scheduleAlarm({
+              id: examId,
+              type: 'exam',
+              title: `📝 Exam Starting Now: ${exam.title}`,
               body: `Good luck! Your ${exam.title} is starting now (${exam.time || 'Today'}).`,
-              schedule: { at: examDate, allowWhileIdle: true },
-              sound: 'res://platform_default',
-              channelId: 'study_planner_alarms',
-              extra: { type: 'exam', examId: exam.id }
+              triggerAtMillis: examDate.getTime(),
+              channelId: 'exam_reminders',
+              route: 'exams'
             });
+            count++;
 
             const date30MinBefore = new Date(examDate.getTime() - 30 * 60 * 1000);
             if (date30MinBefore.getTime() > Date.now()) {
-              notificationsToSchedule.push({
-                id: generateAlarmId(`exam30m_${exam.id}`),
+              const examRemId = generateAlarmId(`exam30m_${exam.id}`);
+              await NativeAlarm.scheduleAlarm({
+                id: examRemId,
+                type: 'exam_reminder',
                 title: `⚠️ Exam Reminder: ${exam.title} in 30 mins`,
                 body: `Your ${exam.title} starts in 30 minutes (${exam.time}). Double check your supplies!`,
-                schedule: { at: date30MinBefore, allowWhileIdle: true },
-                sound: 'res://platform_default',
-                channelId: 'study_planner_alarms',
-                extra: { type: 'exam_reminder', examId: exam.id }
+                triggerAtMillis: date30MinBefore.getTime(),
+                channelId: 'exam_reminders',
+                route: 'exams'
               });
+              count++;
             }
           }
-        });
+        }
       }
 
       // 4. Schedule Homework Due Date Alarms
       if (Array.isArray(homework)) {
-        homework.forEach((hw) => {
-          if (!hw || hw.status === 'Completed' || !hw.dueDate) return;
+        for (const hw of homework) {
+          if (!hw || hw.status === 'Completed' || !hw.dueDate) continue;
           const hwDate = parseExamDateTime(hw.dueDate, '09:00 AM');
           if (hwDate && hwDate.getTime() > Date.now()) {
-            notificationsToSchedule.push({
-              id: generateAlarmId(`hw_${hw.id}`),
-              title: `📝 Homework Due Today: ${hw.title}`,
+            const hwId = generateAlarmId(`hw_${hw.id}`);
+            await NativeAlarm.scheduleAlarm({
+              id: hwId,
+              type: 'homework',
+              title: `📌 Homework Due Today: ${hw.title}`,
               body: `Priority: ${hw.priority || 'Medium'}. Don't forget to submit your ${hw.title}!`,
-              schedule: { at: hwDate, allowWhileIdle: true },
-              sound: 'res://platform_default',
-              channelId: 'study_planner_alarms',
-              extra: { type: 'homework', hwId: hw.id }
+              triggerAtMillis: hwDate.getTime(),
+              channelId: 'homework_reminders',
+              route: 'homework'
             });
+            count++;
           }
-        });
+        }
       }
 
-      // 5. Register all system alarms with Capacitor LocalNotifications
-      if (notificationsToSchedule.length > 0) {
-        const chunkSize = 40;
-        for (let i = 0; i < notificationsToSchedule.length; i += chunkSize) {
-          const chunk = notificationsToSchedule.slice(i, i + chunkSize);
-          await LocalNotifications.schedule({ notifications: chunk });
-        }
-        console.log(`[NOTIFICATION SYNC] Successfully registered ${notificationsToSchedule.length} native Android system alarms!`);
-      }
+      console.log(`[NATIVE ALARM SYNC] Successfully scheduled ${count} native Android AlarmManager alarms!`);
     } catch (err) {
-      console.error('[NOTIFICATION SYNC ERROR]:', err);
+      console.error('[NATIVE ALARM SYNC ERROR]:', err);
     }
   }
 }
