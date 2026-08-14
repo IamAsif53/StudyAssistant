@@ -245,26 +245,16 @@ export const ResourcesView = () => {
           base64Content = base64Content.split(',')[1];
         }
 
-        // Check if existing downloaded file is in Documents, or write to Cache
-        let localPath = '';
-        try {
-          const getUriResult = await Filesystem.getUri({
-            directory: Directory.Documents,
-            path: fileName
-          });
-          localPath = getUriResult.uri;
-          console.log('[PDF OPEN] existing local path:', localPath);
-        } catch (e) {
-          console.log('[PDF OPEN] file not found in Documents, writing to Cache...');
-          const writeResult = await Filesystem.writeFile({
-            path: fileName,
-            data: base64Content,
-            directory: Directory.Cache,
-            recursive: true
-          });
-          localPath = writeResult.uri;
-        }
+        // ALWAYS write file bytes to Directory.Cache to guarantee physical file exists on disk
+        const writeResult = await Filesystem.writeFile({
+          path: fileName,
+          data: base64Content,
+          directory: Directory.Cache,
+          recursive: true
+        });
 
+        const localPath = writeResult.uri;
+        console.log('[PDF OPEN] existing local path:', localPath);
         console.log('[PDF OPEN] path:', localPath);
         console.log('[PDF OPEN] path type:', typeof localPath);
         console.log('[PDF OPEN] native URI:', localPath);
